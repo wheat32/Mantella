@@ -260,3 +260,29 @@ class TestEdgeCases:
 
         # After retrieval, no more sentences
         assert accumulator.has_next_sentence() is False
+
+
+class TestEllipsisAtEndOfLine:
+    """An ellipsis that ends a line is the end of a sentence (eg followed by the line of the next speaker)"""
+
+    def _sentences(self, chunks: list[str]) -> list[str]:
+        acc = sentence_accumulator(['.', '?', '!'])
+        sentences = []
+        for chunk in chunks:
+            acc.accumulate(chunk)
+            while acc.has_next_sentence():
+                sentences.append(acc.get_next_sentence().replace(sentence_accumulator.LINE_END_MARKER, ''))
+        return sentences
+
+    def test_ellipsis_before_next_speaker(self):
+        assert self._sentences(["Ralof: I thought I'd never see you again...\nHadvar: Quiet, both of you."]) == [
+            "Ralof: I thought I'd never see you again...", " Hadvar: Quiet, both of you."]
+
+    def test_ellipsis_and_line_break_in_separate_chunks(self):
+        assert self._sentences(["Ralof: I wonder..", ".", "\n", "Hadvar: Quiet."]) == ["Ralof: I wonder...", " Hadvar: Quiet."]
+
+    def test_unicode_ellipsis(self):
+        assert self._sentences(["I wonder… \nHadvar: Yes."]) == ["I wonder…", " Hadvar: Yes."]
+
+    def test_ellipsis_mid_line_is_not_a_sentence_end(self):
+        assert self._sentences(["Well... I suppose so. Fine."]) == ["Well... I suppose so.", " Fine."]

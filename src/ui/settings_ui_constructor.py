@@ -2,6 +2,7 @@ import typing
 import gradio as gr
 from typing import Any, Callable, TypeVar, NamedTuple, Dict, TypedDict, Optional
 import src.utils as utils
+from src import runtime_state
 
 logger = utils.get_logger()
 
@@ -36,8 +37,14 @@ class ModelConfig(TypedDict):
     model_list_getter: Callable[[str], Any]  # Function to get model list based on service
 
 class SettingsUIConstructor(ConfigValueVisitor):
-    def __init__(self) -> None:
+    def __init__(self, on_setting_changed: Callable[[ConfigValue], None] | None = None) -> None:
+        """
+        Args:
+            on_setting_changed: Optional callback that is called with the config value whenever a setting is changed in the UI
+        """
         super().__init__()
+        self.__on_setting_changed: Callable[[ConfigValue], None] | None = on_setting_changed
+        self.__identifier_to_container: dict[str, Any] = {}
         self.__identifier_to_config_value: dict[str, ConfigValue] = {}
         self.__config_value_to_ui_element: dict[ConfigValue, Any] = {}
         self.__pending_shared_setting: SettingConfig | None = None
@@ -54,6 +61,32 @@ class SettingsUIConstructor(ConfigValueVisitor):
                 self.__config_value_to_ui_element,
             )
         return self.__profile_handler
+
+    def setup_conditional_visibility(self, controlling_identifier: str, dependent_identifiers: list[str], is_visible: Callable[[Any], bool]) -> None:
+        """Shows the given settings only while the value of another setting meets a condition.
+        Has to be called (inside the gr.Blocks context) once all settings involved have been created
+
+        Args:
+            controlling_identifier: The setting whose value decides the visibility
+            dependent_identifiers: The settings to show / hide
+            is_visible: Returns whether the dependent settings should be shown for a given value of the controlling setting
+        """
+        controlling_value = self.__identifier_to_config_value.get(controlling_identifier)
+        controlling_input = self.__config_value_to_ui_element.get(controlling_value) if controlling_value else None
+        containers = [self.__identifier_to_container[i] for i in dependent_identifiers if i in self.__identifier_to_container]
+        if controlling_input is None or not containers or not hasattr(controlling_input, "_id"):
+            return
+
+        def get_visibility(value: Any):
+            try:
+                visible = bool(is_visible(value))
+            except Exception:
+                visible = True
+            return [gr.update(visible=visible) for _ in containers]
+
+        for container in containers:
+            container.visible = get_visibility(controlling_value.value)[0]["visible"]
+        controlling_input.change(get_visibility, controlling_input, containers)
 
     def __create_tooltip(self, config_value: ConfigValue, is_second_setting: bool = False) -> str:
         """Creates the tooltip HTML for a config value"""
@@ -140,16 +173,18 @@ class SettingsUIConstructor(ConfigValueVisitor):
         with gr.Row():
             is_second_setting = False
             for setting in [setting1, setting2]:
-                with gr.Column(variant="panel", scale=1):
+                with gr.Column(variant="panel", scale=1) as container:
                     components = self.__create_setting_components(setting, is_second_setting)
                     is_second_setting = True
+                    self.__identifier_to_container[setting.config_value.identifier] = container
                     self.__identifier_to_config_value[setting.config_value.identifier] = setting.config_value
                     self.__config_value_to_ui_element[setting.config_value] = components.input_ui
 
     def __create_single_setting(self, setting: SettingConfig):
         """Creates a single setting taking up the full row"""
-        with gr.Column(variant="panel", scale=1):
+        with gr.Column(variant="panel", scale=1) as container:
             components = self.__create_setting_components(setting)
+            self.__identifier_to_container[setting.config_value.identifier] = container
             self.__identifier_to_config_value[setting.config_value.identifier] = setting.config_value
             self.__config_value_to_ui_element[setting.config_value] = components.input_ui
 
@@ -186,6 +221,13 @@ class SettingsUIConstructor(ConfigValueVisitor):
             if config_value.value != new_value:
                 config_value.value = new_value
                 logger.info(f'{config_value.name} set to {config_value.value}')
+                if runtime_state.is_conversation_active():
+                    gr.Info('A conversation is in progress. This change will take effect once the conversation has ended.')
+                if self.__on_setting_changed:
+                    try:
+                        self.__on_setting_changed(config_value)
+                    except Exception as e:
+                        logger.warning(f'Could not apply the change to {config_value.name}: {e}')
             return self.__construct_error_message_panel('', is_visible=False)
         else:
             return self.__construct_error_message_panel(result.error_message, is_visible=True)

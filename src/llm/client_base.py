@@ -1,7 +1,7 @@
 from threading import Lock
 from typing import AsyncGenerator, Any
 from enum import Enum
-from openai import APIConnectionError, BadRequestError, OpenAI, AsyncOpenAI, RateLimitError
+from openai import APIConnectionError, APITimeoutError, BadRequestError, OpenAI, AsyncOpenAI, RateLimitError
 from openai.types.chat import ChatCompletion
 import time
 import tiktoken
@@ -17,6 +17,7 @@ import src.utils as utils
 from src.telemetry.telemetry import create_span_from_thread
 from src.actions.function_manager import FunctionManager
 from src.llm.claude_cache_connector import ClaudeCacheConnector
+from src.llm.anthropic_connector import AnthropicConnector
 
 logger = utils.get_logger()
 
@@ -35,6 +36,10 @@ class ClientBase(AIClient):
     token counting, endpoint resolution, and model list retrieval
     '''
     api_token_limits = {}
+    # Seconds to wait for the LLM service to respond (and, while streaming, for the next part of the response) before giving up
+    request_timeout: float = 60.0
+    # How often a request is repeated after a connection error, timeout, rate limit (429) or server error (5xx), before the error is raised
+    max_request_retries: int = 2
     tiktoken_cache_dir = "data"
     os.environ["TIKTOKEN_CACHE_DIR"] = tiktoken_cache_dir
 
@@ -73,6 +78,10 @@ class ClientBase(AIClient):
         xtitle = "Mantella"
         self._header: dict[str, str] = {"HTTP-Referer": referer, "X-Title": xtitle}
         self._claude_cache = ClaudeCacheConnector()
+        # Claude models are reached through the Anthropic SDK when connecting to Anthropic directly (instead of via an OpenAI compatible endpoint)
+        self._anthropic: AnthropicConnector | None = None
+        if AnthropicConnector.is_applicable(self._base_url):
+            self._anthropic = AnthropicConnector(self._api_key, ClientBase.request_timeout, ClientBase.max_request_retries)
         self._caching_enabled: bool = prompt_caching_enabled
         self._token_limit: int = self.__get_token_limit(self._model_name, custom_token_count, self._is_local)
         self._encoding = self.__get_model_encoding(api_url, self._model_name)
@@ -150,7 +159,7 @@ class ClientBase(AIClient):
         Returns:
             AsyncOpenAI: The new async client object
         """
-        return AsyncOpenAI(api_key=self._api_key, base_url=self._base_url, default_headers=self._header)
+        return AsyncOpenAI(api_key=self._api_key, base_url=self._base_url, default_headers=self._header, timeout=ClientBase.request_timeout, max_retries=ClientBase.max_request_retries)
 
 
     @utils.time_it
@@ -163,7 +172,7 @@ class ClientBase(AIClient):
         Returns:
             OpenAI: The new sync client object
         """
-        return OpenAI(api_key=self._api_key, base_url=self._base_url, default_headers=self._header)
+        return OpenAI(api_key=self._api_key, base_url=self._base_url, default_headers=self._header, timeout=max(ClientBase.request_timeout, 120.0), max_retries=ClientBase.max_request_retries)
 
 
     @utils.time_it
@@ -176,6 +185,9 @@ class ClientBase(AIClient):
         Returns:
             The full chat completion object or None if the request failed
         """
+        if self._anthropic:
+            logger.error('This type of request is not supported when connecting to Anthropic directly. Please select a different service for the tool calling (function) LLM')
+            return None
         with self._generation_lock:
             sync_client = self.generate_sync_client()        
             chat_completion: ChatCompletion = None
@@ -223,6 +235,9 @@ class ClientBase(AIClient):
         Returns:
             The LLM response message content or None if the request failed
         """
+        if self._anthropic:
+            return self._request_call_anthropic(messages)
+
         chat_completion: ChatCompletion = self._request_call_full(messages)
         
         if (
@@ -238,6 +253,22 @@ class ClientBase(AIClient):
         return reply
         
     
+    def _request_call_anthropic(self, messages: Message | message_thread) -> str | None:
+        """Makes a (non-streamed) request to the Claude API and returns the message content"""
+        with self._generation_lock:
+            logger.log(28, 'Getting LLM response...')
+            if isinstance(messages, Message) or isinstance(messages, ImageMessage):
+                openai_messages = [messages.get_openai_message()]
+            else:
+                openai_messages = messages.get_openai_messages()
+            try:
+                return self._anthropic.complete(self.model_name, openai_messages, self._request_params, self._caching_enabled)
+            except Exception as e:
+                # Raised to the caller, like errors of other services, so that eg summaries can be retried
+                logger.error(f'Claude API error: {e}')
+                raise
+
+
     @utils.time_it
     async def streaming_call(self, messages: Message | message_thread, is_multi_npc: bool, tools: list[dict] = None) -> AsyncGenerator[tuple[str, str | list] | None, None]:
         with create_span_from_thread("llm_streaming_call") as span:
@@ -289,6 +320,12 @@ class ClientBase(AIClient):
                             openai_messages = self._claude_cache.transform_messages(openai_messages)
                         except Exception as e:
                             logger.debug(f"Claude caching transform failed: {e}")
+
+                    if self._anthropic:
+                        claude_tools = request_params.pop("tools", None)
+                        async for item in self._anthropic.stream(self.model_name, openai_messages, request_params, claude_tools, self._caching_enabled):
+                            yield item
+                        return
 
                     # Create async client for main LLM streaming (after function client has run if applicable)
                     if self._startup_async_client:
@@ -360,6 +397,8 @@ class ClientBase(AIClient):
                             logger.error(f"Invalid request. Try disabling Vision in Mantella's settings and try again.")
                         else:
                             logger.error(f"LLM API Streaming Error: {e}")
+                    elif isinstance(e, APITimeoutError):
+                        logger.error(f"The LLM did not respond within {ClientBase.request_timeout:g} seconds. If this happens often, try a different model / provider, or increase `Large Language Model`->`Response Timeout` in the Mantella UI")
                     else:
                         logger.error(f"LLM API Streaming Error: {e}")
                 finally:
@@ -588,9 +627,23 @@ For more information, see here: https://art-from-the-machine.github.io/Mantella/
     
     @staticmethod
     def get_model_list(service: str, default_model: str = "google/gemma-4-26b-a4b-it:free", is_vision: bool = False, is_tool_calling: bool = False, show_key_error: bool = False) -> LLMModelList:
-        if service not in ['OpenAI', 'OpenRouter', 'NanoGPT']:
+        if service not in ['OpenAI', 'OpenRouter', 'NanoGPT', 'Anthropic']:
             return LLMModelList([("Custom model","Custom model")], "Custom model", allows_manual_model_input=True)
         try:
+            if service == "Anthropic":
+                default_model = "claude-opus-5-5"
+                secret_key = ClientBase._get_api_key("Anthropic", show_error=show_key_error)
+                if not secret_key:
+                    return LLMModelList([(f"No secret key found for Anthropic", default_model)], default_model, allows_manual_model_input=True)
+                options = []
+                for display_name, model_id, context_size in AnthropicConnector.get_models(secret_key):
+                    if context_size:
+                        ClientBase.api_token_limits[model_id] = context_size
+                        options.append((f"{display_name} ({model_id}) | Context: {utils.format_context_size(context_size)}", model_id))
+                    else:
+                        options.append((f"{display_name} ({model_id})", model_id))
+                return LLMModelList(options, default_model, allows_manual_model_input=True)
+
             if service == "OpenAI":
                 default_model = "gpt-4o-mini"
                 models = utils.get_openai_model_list()

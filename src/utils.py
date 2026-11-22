@@ -396,6 +396,8 @@ def get_openai_model_list():
 
 
 _KNOWN_SERVICES: dict[str, str] = {
+    'anthropic': 'https://api.anthropic.com',
+    'claude': 'https://api.anthropic.com',
     'openai': 'https://api.openai.com/v1',
 
     'openrouter': 'https://openrouter.ai/api/v1',

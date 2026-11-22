@@ -10,6 +10,8 @@ from src.games.gameable import Gameable
 from src.games.skyrim import Skyrim
 from src.output_manager import ChatManager
 from src.llm.llm_client import LLMClient
+from src.setup import MantellaSetup
+from src.llm.client_base import ClientBase
 from src.llm.summary_client import SummaryLLMClient
 from src.game_manager import GameStateManager
 from src.http.routes.routeable import routeable
@@ -55,6 +57,8 @@ class mantella_route(routeable):
 
         tts: TTSable = create_tts(self._config.tts_service, self._config, game)
 
+        ClientBase.request_timeout = float(self._config.llm_timeout)
+        MantellaSetup.apply_console_log_setting(self._config)
         llm_client = LLMClient(self._config)
 
         summary_client: SummaryLLMClient | None = None

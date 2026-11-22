@@ -257,6 +257,7 @@ class ConfigLoader:
             self.min_refresh_secs = self.__definitions.get_float_value("min_refresh_secs")
             self.play_cough_sound = self.__definitions.get_bool_value("play_cough_sound")
             self.allow_interruption = self.__definitions.get_bool_value("allow_interruption")
+            self.instant_interruption = self.__definitions.get_bool_value("instant_interruption")
             self.ptt_enabled = self.__definitions.get_bool_value("ptt_enabled")
             self.ptt_hotkey = self.__definitions.get_string_value("ptt_hotkey")
             self.save_mic_input = self.__definitions.get_bool_value("save_mic_input")
@@ -280,6 +281,7 @@ class ConfigLoader:
             # if self.llm_api == "Custom":
             #     self.llm_api = self.__definitions.get_string_value("llm_custom_service_url")
             self.custom_token_count = self.__definitions.get_int_value("custom_token_count")
+            self.llm_timeout = self.__definitions.get_int_value("llm_timeout")
             try:
                 self.llm_params: dict[str, Any] | None = json.loads(self.__definitions.get_string_value("llm_params").replace('\n', ''))
             except Exception as e:
@@ -346,6 +348,7 @@ LLM parameter list must be valid JSON""")
             self.show_http_debug_messages: bool = self.__definitions.get_bool_value("show_http_debug_messages")
 
             self.advanced_logs = self.__definitions.get_bool_value("advanced_logs")
+            self.save_console_logs = self.__definitions.get_bool_value("save_console_logs")
 
             self.save_audio_data_to_character_folder = self.__definitions.get_bool_value("save_audio_data_to_character_folder")
 

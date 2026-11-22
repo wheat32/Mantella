@@ -412,6 +412,54 @@ class Context:
             result += "Both the action prefix and NPC name need colons to be valid, e.g. 'CharacterName: Action: Lead the way.'\n"
         return result
     
+    @staticmethod
+    def trim_oldest_memories(conversation_summaries: str) -> tuple[str, int]:
+        """Removes the oldest memories (roughly an eighth of them, at least one per NPC) from the summaries text of a prompt
+
+        Each memory is a single line, optionally preceded by a timestamp line (eg "[Day 42, 5 in the evening]").
+        Headers and the markers that separate the memories of different NPCs are kept.
+
+        Returns:
+            tuple[str, int]: the trimmed text, and the number of memories removed (0 if there is nothing left to remove)
+        """
+        def is_structural(line: str) -> bool:
+            stripped = line.strip()
+            return stripped.startswith('Below is a summary of past events') or stripped.startswith('(This is the') or stripped.startswith('[This is the')
+
+        def is_timestamp(line: str) -> bool:
+            stripped = line.strip()
+            return stripped.startswith('[Day ') and stripped.endswith(']')
+
+        lines = conversation_summaries.split('\n')
+        # Group the lines into sections (one per NPC), each a list of memories made up of the indices of their lines
+        sections: list[list[list[int]]] = [[]]
+        pending_timestamp: int | None = None
+        for index, line in enumerate(lines):
+            if is_structural(line):
+                sections.append([])
+                pending_timestamp = None
+            elif not line.strip():
+                continue
+            elif is_timestamp(line):
+                pending_timestamp = index
+            else:
+                sections[-1].append(([pending_timestamp] if pending_timestamp is not None else []) + [index])
+                pending_timestamp = None
+
+        lines_to_remove: set[int] = set()
+        removed_count = 0
+        for memories in sections:
+            if len(memories) <= 1: # always keep the most recent memory of an NPC (dropping everything is the last resort)
+                continue
+            count = min(max(1, len(memories) // 8), len(memories) - 1)
+            for memory in memories[:count]:
+                lines_to_remove.update(memory)
+            removed_count += count
+
+        if removed_count == 0:
+            return conversation_summaries, 0
+        return '\n'.join(line for index, line in enumerate(lines) if index not in lines_to_remove), removed_count
+
     @utils.time_it
     def generate_system_message(self, prompt: str, actions_for_prompt: list[Action]) -> str:
         """Fills the variables in the prompt with the values calculated from the context
@@ -472,12 +520,14 @@ class Context:
         # Only include legacy action prompts if advanced actions are disabled
         actions = self.__get_action_texts(actions_for_prompt) if not self.__config.advanced_actions_enabled else ""
 
-        removal_content: list[tuple[str, str]] = [(bios, conversation_summaries),(bios,""),("","")]
         have_bios_been_dropped = False
         have_summaries_been_dropped = False
-        logger.log(23, f'Maximum size of prompt is {self.__client.token_limit} x {self.TOKEN_LIMIT_PERCENT} = {int(round(self.__client.token_limit * self.TOKEN_LIMIT_PERCENT, 0))} tokens.')
-        for content in removal_content:
-            result = prompt.format(
+        dropped_memory_count = 0
+        max_prompt_tokens = int(round(self.__client.token_limit * self.TOKEN_LIMIT_PERCENT, 0))
+        logger.log(23, f'Maximum size of prompt is {self.__client.token_limit} x {self.TOKEN_LIMIT_PERCENT} = {max_prompt_tokens} tokens.')
+
+        def build_prompt(bios_text: str, summaries_text: str) -> str:
+            return prompt.format(
                 player_name = player_name,
                 player_description = player_description,
                 player_equipment = player_equipment,
@@ -486,8 +536,8 @@ class Context:
                 name=name,
                 names=names,
                 names_w_player = names_w_player,
-                bio=content[0],
-                bios=content[0], 
+                bio=bios_text,
+                bios=bios_text, 
                 trust=trusts,
                 gender=gender,
                 race=race,
@@ -501,19 +551,31 @@ class Context:
                 current_day=current_day,
                 time_group=time_group, 
                 language=self.__language['language'], 
-                conversation_summary=content[1],
-                conversation_summaries=content[1],
+                conversation_summary=summaries_text,
+                conversation_summaries=summaries_text,
                 actions = actions
                 )
-            if self.__client.is_too_long(result, self.TOKEN_LIMIT_PERCENT):
-                if content[0] != "":
-                    have_summaries_been_dropped = True
-                else:
-                    have_bios_been_dropped = True
-            else:
+
+        result = build_prompt(bios, conversation_summaries)
+        # If the prompt is too long, forget the oldest memories first rather than all of them at once
+        while self.__client.is_too_long(result, self.TOKEN_LIMIT_PERCENT):
+            trimmed_summaries, removed_count = self.trim_oldest_memories(conversation_summaries)
+            if removed_count == 0:
                 break
+            conversation_summaries = trimmed_summaries
+            dropped_memory_count += removed_count
+            result = build_prompt(bios, conversation_summaries)
+
+        if self.__client.is_too_long(result, self.TOKEN_LIMIT_PERCENT):
+            have_summaries_been_dropped = True
+            result = build_prompt(bios, "")
+            if self.__client.is_too_long(result, self.TOKEN_LIMIT_PERCENT):
+                have_bios_been_dropped = True
+                result = build_prompt("", "")
         
         logger.log(23, f'Prompt sent to LLM ({self.__client.get_count_tokens(result)} tokens): {result.strip()}')
+        if dropped_memory_count > 0 and not have_summaries_been_dropped:
+            logger.warning(f'The memories of the NPCs selected could not fully fit into the maximum prompt size of {max_prompt_tokens} tokens. The {dropped_memory_count} oldest memories have been left out of this conversation.')
         if have_summaries_been_dropped and have_bios_been_dropped:
             logger.warning(f'Both the bios and summaries of the NPCs selected could not fit into the maximum prompt size of {int(round(self.__client.token_limit * self.TOKEN_LIMIT_PERCENT, 0))} tokens. NPCs will not remember previous conversations and will have limited knowledge of who they are.')
         elif have_summaries_been_dropped:

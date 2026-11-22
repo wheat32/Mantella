@@ -43,6 +43,8 @@ class Conversation:
         self.__mic_ptt: bool = mic_ptt
         self.__allow_interruption: bool = context_for_conversation.config.allow_interruption # allow mic interruption
         self.__is_player_interrupting = False
+        self.__interrupted_npc_name: str | None = None
+        self.__last_npc_speaker_name: str | None = None
         self.__stt: Transcriber | None = stt
         self.__events_refresh_time: float = context_for_conversation.config.events_refresh_time  # Time in seconds before events are considered stale
         self.__transcribed_text: str | None = None
@@ -139,7 +141,7 @@ class Conversation:
             self.__initiate_reload_conversation()
 
         # interrupt response if player has spoken
-        if self.__stt and self.__stt.has_player_spoken:
+        if self.__interruption_enabled() and self.__stt.has_player_spoken:
             return self.__interrupt_response()
         
         # restart mic listening as soon as NPC's first sentence is processed
@@ -165,7 +167,7 @@ class Conversation:
                 logger.debug(f'Waiting {round(self.last_sentence_audio_length, 1)} seconds for last voiceline to play')
             # before immediately sending the next voiceline, give the player the chance to interrupt
             while time.time() - self.last_sentence_start_time < self.last_sentence_audio_length:
-                if self.__stt and self.__stt.has_player_spoken:
+                if self.__interruption_enabled() and self.__stt.has_player_spoken:
                     return self.__interrupt_response()
                 time.sleep(0.01)
             self.last_sentence_audio_length = next_sentence.voice_line_duration + self.__context.config.wait_time_buffer
@@ -205,7 +207,9 @@ class Conversation:
         return (self.__stt is not None
                 and self.__mic_input
                 and self.__allow_interruption
-                and not self.__mic_ptt
+                # With push-to-talk, pressing the key while an NPC speaks interrupts them. This needs Mantella itself to watch the key
+                # (`Speech-to-Text`->`Push-to-Talk`): if only the game knows about the key, speech cannot be told apart from background noise
+                and (not self.__mic_ptt or self.__stt.ptt_enabled)
                 and self.__allow_mic_input
                 and not isinstance(self.__conversation_type, radiant))
 
@@ -219,6 +223,13 @@ class Conversation:
         self.__stop_generation()
         self.__sentences.clear()
         self.__is_player_interrupting = True
+        # the NPC was cut off if their line was still playing, or if they had more to say
+        was_npc_speaking = time.time() - self.last_sentence_start_time < self.last_sentence_audio_length
+        self.__interrupted_npc_name = self.__last_npc_speaker_name if (was_npc_speaking or self.__last_npc_speaker_name) else None
+        if self.__stt is not None and self.__stt.ptt_enabled:
+            # Pressing the push-to-talk key is a deliberate interruption (unlike noise picked up by an open mic),
+            # so audio played by Mantella itself is stopped straight away
+            self.__output_manager.stop_external_playback()
         # the interrupted line's estimated duration no longer applies
         self.last_sentence_audio_length = 0
         return comm_consts.KEY_REQUESTTYPE_TTS, None
@@ -385,8 +396,9 @@ class Conversation:
             all_ingame_events.append(f"{discarded} is not in this conversation. Only {', '.join(npc_names)} can speak.")
             self.__output_manager.clear_discarded_character_name()
         if self.__is_player_interrupting:
-            all_ingame_events.append('Interrupting...')
+            all_ingame_events.append(self.__get_interruption_event())
             self.__is_player_interrupting = False
+            self.__interrupted_npc_name = None
         max_events = min(len(all_ingame_events) ,self.__context.config.max_count_events)
         message.add_event(all_ingame_events[-max_events:])
         self.__context.clear_context_ingame_events()        
@@ -395,6 +407,17 @@ class Conversation:
             logger.log(28, f'In-game events since previous exchange:\n{message.get_ingame_events_text()}')
 
         return message
+
+    def __get_interruption_event(self) -> str:
+        """Tells the LLM that the player talked over an NPC, so that the NPC can react to it the way their character would
+        (eg a proud or short-tempered NPC taking offence, a loyal follower not minding at all)"""
+        player = self.__context.npcs_in_conversation.get_player_character()
+        player_name = player.name if player else 'The player'
+        npc_name = self.__interrupted_npc_name
+        if npc_name:
+            return (f"{player_name} interrupted {npc_name} mid-sentence, talking over them before they could finish. "
+                    f"{npc_name} reacts to being cut off the way someone of their personality and standing would.")
+        return f"{player_name} interrupted the conversation, talking over what was being said."
 
     @utils.time_it
     def resume_after_interrupting_action(self) -> bool:
@@ -445,6 +468,8 @@ class Conversation:
                 last_message.is_multi_npc_message = self.__context.npcs_in_conversation.contains_multiple_npcs()
                 self.__messages.add_message(last_message)
             last_message.add_sentence(next_sentence)
+            if next_sentence.text.strip():
+                self.__last_npc_speaker_name = next_sentence.speaker.name
         return next_sentence
    
     @utils.time_it

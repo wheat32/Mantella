@@ -9,7 +9,7 @@ import sys
 from src.config.config_loader import ConfigLoader
 from src.telemetry.telemetry import get_telemetry_manager
 from src.actions.function_manager import FunctionManager
-from src.ui.log_buffer import get_log_buffer
+from src.ui.log_buffer import get_log_buffer, get_console_log_file
 from src.wine import to_host_path
 
 class MantellaSetup:
@@ -30,6 +30,7 @@ class MantellaSetup:
         self.config.actions = FunctionManager.get_legacy_actions()
 
         logger = utils.get_logger()
+        self.apply_console_log_setting(self.config)
         # to_host_path shows the paths as they are on the host system when running under Wine / Proton
         logger.log(23, f'''Mantella.exe running in:
     {to_host_path(os.getcwd())}
@@ -53,6 +54,16 @@ Conversation histories, config.ini, and logging.log available in:
         self._setup_telemetry(self.config, mantella_version)
 
         return self.config, self.language_info
+
+    @staticmethod
+    def apply_console_log_setting(config: ConfigLoader):
+        """Starts / stops saving the console output to a file according to the `Save Console Logs` setting"""
+        logger = utils.get_logger()
+        console_log_file = get_console_log_file()
+        was_saving = console_log_file.file_path is not None
+        file_path = console_log_file.apply_setting(getattr(config, 'save_console_logs', False) is True, config.save_folder, logger)
+        if file_path and not was_saving:
+            logger.log(23, f'Console logs of this run are saved to: {to_host_path(file_path)}')
 
     def _set_cwd_to_exe_dir(self):
         '''Set the current working directory to the executable's directory if running as exe'''

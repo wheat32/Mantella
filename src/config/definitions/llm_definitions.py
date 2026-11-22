@@ -43,8 +43,10 @@ class LLMDefinitions:
             If you are connecting to a local service (KoboldCpp, textgenwebui etc), please ensure that the service is running and a model is loaded. You can also ignore the dropdown options and instead enter a custom URL to connect to other LLM services that provide an OpenAI compatible endpoint.
             After selecting a service, select the model using the option below. Press the *Update* button to load a list of models available from the service.
 
-            If you are using an API (OpenAI, OpenRouter, etc) ensure you have the correct secret key set in `GPT_SECRET_KEY.txt` for the respective service you are using."""
-        return ConfigValueSelection("llm_api","LLM Service",description, "OpenRouter", ["OpenRouter", "OpenAI", "NanoGPT", "KoboldCpp", "textgenwebui"], allows_free_edit=True)
+            If you are using an API (OpenAI, OpenRouter, etc) ensure you have the correct secret key set in `GPT_SECRET_KEY.txt` for the respective service you are using.
+
+            The Anthropic service connects to Claude directly (https://api.anthropic.com) rather than through an OpenAI compatible endpoint. With this service, the `effort` parameter (low / medium / high) can be set in the LLM parameters (default: low), and sampling parameters such as temperature are ignored as current Claude models do not accept them."""
+        return ConfigValueSelection("llm_api","LLM Service",description, "OpenRouter", ["OpenRouter", "OpenAI", "Anthropic", "NanoGPT", "KoboldCpp", "textgenwebui"], allows_free_edit=True)
 
     @staticmethod
     def get_model_config_value() -> ConfigValue:
@@ -80,6 +82,13 @@ class LLMDefinitions:
                     Keep in mind that if this number is greater than the actual token count of the model, then Mantella will crash if a given conversation exceeds the model's token limit."""
         return ConfigValueInt("custom_token_count","Custom Token Count",description, 4096, 4096, 9999999)
     
+    @staticmethod
+    def get_llm_timeout_config_value() -> ConfigValue:
+        description = """How long to wait (in seconds) for the LLM to respond before giving up on a request.
+                    This also applies to pauses in the middle of a response, so a stalled response does not leave the conversation hanging.
+                    Increase this value if you are running a slow local model."""
+        return ConfigValueInt("llm_timeout","Response Timeout",description, 60, 5, 3600, tags=[ConfigValueTag.advanced])
+
     @staticmethod
     def get_wait_time_buffer_config_value() -> ConfigValue:
         description = """Time to wait (in seconds) before generating the next voiceline.
@@ -152,8 +161,9 @@ class LLMDefinitions:
 
     @staticmethod
     def get_claude_prompt_caching_config_value() -> ConfigValue:
-        description = """WARNING: This is an experimental feature and may increase rather than decrease billing.
-                        Enable Claude prompt caching when using Anthropic Claude models via OpenRouter."""
+        description = """Enable prompt caching for Claude models, which lowers the cost of (and can speed up) long conversations by reusing the parts of the prompt that have not changed since the previous request.
+                        Applies when using Claude via the Anthropic service (recommended, as caching is applied the way the Claude API expects it) or via OpenRouter.
+                        Note that Claude only caches prompts above a minimum size (1024 - 4096 tokens depending on the model), and that writing to the cache costs slightly more than a regular request. For short conversations with small prompts this can increase rather than decrease billing."""
         return ConfigValueBool("claude_prompt_caching_enabled", "Claude Prompt Caching", description, False, tags=[ConfigValueTag.advanced])
     
     @staticmethod
@@ -181,7 +191,7 @@ class LLMDefinitions:
             If you are using an API (OpenAI, OpenRouter, etc) ensure you have the correct secret key set in `GPT_SECRET_KEY.txt` for the respective service you are using.
 
             By default, summaries use the same LLM as conversations. Configure this to use a different model for summaries."""
-        return ConfigValueSelection("summary_llm_api","Custom Summary Model Service",description,"OpenRouter",["OpenRouter", "OpenAI", "NanoGPT", "KoboldCpp", "textgenwebui"],allows_free_edit=True,tags=[ConfigValueTag.advanced])
+        return ConfigValueSelection("summary_llm_api","Custom Summary Model Service",description,"OpenRouter",["OpenRouter", "OpenAI", "Anthropic", "NanoGPT", "KoboldCpp", "textgenwebui"],allows_free_edit=True,tags=[ConfigValueTag.advanced])
 
     @staticmethod
     def get_summary_llm_config_value() -> ConfigValue:

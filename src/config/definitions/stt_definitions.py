@@ -59,6 +59,13 @@ class STTDefinitions:
         return ConfigValueString("ptt_hotkey", "Push-to-Talk Hotkey", description, "V", tags=[ConfigValueTag.advanced,ConfigValueTag.share_row])
     
     @staticmethod
+    def get_instant_interruption_config_value() -> ConfigValue:
+        description = """How the game is told that you have interrupted an NPC (see `Allow Interruption`).
+                        Disabled (default): works with every version of the Mantella mod. The NPC stops generating their response as soon as you start speaking (or press the push-to-talk key), and their current voiceline is cut off once they start to respond to you.
+                        Enabled: the NPC's voiceline is cut off the moment you start speaking. This requires Mantella mod scripts and SKSE plugins newer than Mantella v0.14. With older versions of the mod, enabling this setting will cause conversations to freeze when you interrupt an NPC."""
+        return ConfigValueBool("instant_interruption", "Instant Interruption", description, False, tags=[ConfigValueTag.advanced])
+
+    @staticmethod
     def get_stt_name_correction_config_value() -> ConfigValue:
         description = """If enabled, words in your mic input that sound like the name of an NPC in the conversation are replaced with that name (eg "roll off" -> "Ralof").
                         This only applies to Moonshine, which (unlike Whisper) cannot be given the names of the NPCs in advance and so tends to mishear them.

@@ -111,3 +111,26 @@ def _free_wine_string(kernel32, pointer) -> None:
         kernel32.HeapFree(kernel32.GetProcessHeap(), 0, pointer)
     except Exception:
         pass
+
+
+def open_url_on_host(url: str) -> bool:
+    """Opens a URL in the default browser of the host system when running under Wine / Proton, where the regular way of
+    opening a browser (through the Windows shell) often has no browser to hand the URL to
+
+    Returns:
+        bool: whether a command to open the URL could be started (not whether a browser actually opened)
+    """
+    if not is_running_under_wine():
+        return False
+    import subprocess
+    # `start /unix` runs a program of the host system. Inside the Steam runtime, xdg-open forwards the URL to the desktop
+    for opener in ('/usr/bin/xdg-open', '/run/host/usr/bin/xdg-open'):
+        if not os.path.exists(to_windows_path(opener)):
+            continue
+        try:
+            subprocess.Popen(['cmd', '/c', 'start', '/unix', opener, url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+            return True
+        except Exception:
+            continue
+    return False

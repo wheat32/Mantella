@@ -9,7 +9,9 @@ from src.ui.settings_ui_constructor import SettingsUIConstructor
 from src.ui.log_buffer import get_log_buffer
 from src.ui.memory_editor import MemoryEditor
 from src.ui import process_control
-from src.wine import to_host_path
+from src.wine import to_host_path, open_url_on_host
+from src.config.definitions.tts_definitions import TTSDefinitions
+from src.setup import MantellaSetup
 from src.config.definitions.game_definitions import GameEnum
 import src.utils as utils
 
@@ -20,12 +22,16 @@ class StartUI(routeable):
     BANNER = "docs/_static/img/mantella_banner.png"
     def __init__(self, config: ConfigLoader) -> None:
         super().__init__(config)
-        self.__constructor = SettingsUIConstructor()
+        self.__constructor = SettingsUIConstructor(self.__on_setting_changed)
 
     def create_main_block(self) -> gr.Blocks:
         with gr.Blocks(title="Mantella", fill_height=True, analytics_enabled=False, theme= self.__get_theme(), css=self.__load_css(), js=self.CONSOLE_JS) as main_block:
             # with gr.Tab("Settings") as tabs:
             settings_page = self.__generate_settings_page()
+            # Options that configure the XTTS server Mantella starts itself are meaningless if XTTS runs on another machine
+            self.__constructor.setup_conditional_visibility(
+                "xtts_url", ["xtts_server_folder", "xtts_device", "xtts_deepspeed", "xtts_lowvram"],
+                lambda xtts_url: TTSDefinitions.is_xtts_url_local(xtts_url))
             with gr.Tab("NPC Memories"):
                 self.__generate_memory_page()
             # with gr.Tab("Chat with NPCs", interactive=False):
@@ -42,6 +48,12 @@ class StartUI(routeable):
                     </div>
                 """)
         return main_block
+
+    def __on_setting_changed(self, config_value):
+        """Applies settings that can take effect straight away, without waiting for Mantella's services to be set up again"""
+        if config_value.identifier == "save_console_logs":
+            self._config.save_console_logs = config_value.value
+            MantellaSetup.apply_console_log_setting(self._config)
 
     def _get_memory_editor(self) -> MemoryEditor:
         game_folder = "Fallout4" if self._config.game.base_game == GameEnum.FALLOUT4 else "Skyrim"
@@ -181,7 +193,7 @@ class StartUI(routeable):
         logger.log(24, f'\nMantella settings can be changed via this link:')
         logger.log(25, link)
         if self._config.auto_launch_ui == True and not process_control.was_restarted_from_ui():
-            if not webbrowser.open(link, new=2):
+            if not open_url_on_host(link) and not webbrowser.open(link, new=2):
                 logger.warning('\nFailed to open Mantella settings UI automatically. To edit settings, see here:')
                 logger.log(25, link)
     

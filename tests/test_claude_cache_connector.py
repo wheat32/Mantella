@@ -57,17 +57,17 @@ class TestGetCacheTargetIndex:
         assert connector._get_cache_target_index(msgs) == 0
 
     def test_two_user_turns(self, connector: ClaudeCacheConnector):
-        """Turn 2: system + user_prev + assistant + user_new -> cache on user_prev (index 1)"""
+        """Turn 2: system + user_prev + assistant + user_new -> cache everything before the newest message (index 2)"""
         msgs = [
             {"role": "system", "content": "You are an AI."},
             {"role": "user", "content": "Hello."},
             {"role": "assistant", "content": "Hi there."},
             {"role": "user", "content": "How are you?"},
         ]
-        assert connector._get_cache_target_index(msgs) == 1
+        assert connector._get_cache_target_index(msgs) == 2
 
     def test_three_user_turns(self, connector: ClaudeCacheConnector):
-        """Turn 3: cache on second-to-last user (index 3)"""
+        """Turn 3: cache everything before the newest message (index 4)"""
         msgs = [
             {"role": "system", "content": "You are an AI."},
             {"role": "user", "content": "Hello."},
@@ -76,24 +76,24 @@ class TestGetCacheTargetIndex:
             {"role": "assistant", "content": "Good thanks."},
             {"role": "user", "content": "Me too thanks."},
         ]
-        assert connector._get_cache_target_index(msgs) == 3
+        assert connector._get_cache_target_index(msgs) == 4
 
     def test_last_message_not_user(self, connector: ClaudeCacheConnector):
-        """If last message isn't a user message, no caching"""
+        """If the last message isn't a user message (eg a request continuing after a tool call), the messages before it are still cached"""
         msgs = [
             {"role": "system", "content": "You are an AI."},
             {"role": "user", "content": "Hello."},
             {"role": "assistant", "content": "Hi there."},
         ]
-        assert connector._get_cache_target_index(msgs) is None
+        assert connector._get_cache_target_index(msgs) == 1
 
     def test_no_system_no_previous_user(self, connector: ClaudeCacheConnector):
-        """assistant + user -> no previous user and no system at index 0"""
+        """assistant + user -> the assistant message is everything before the newest message"""
         msgs = [
             {"role": "assistant", "content": "Something something."},
             {"role": "user", "content": "Hello."},
         ]
-        assert connector._get_cache_target_index(msgs) is None
+        assert connector._get_cache_target_index(msgs) == 0
 
 
 class TestTransformMessages:
@@ -131,7 +131,7 @@ class TestTransformMessages:
         assert result[1]["content"] == "Hello there."
 
     def test_turn2_caches_previous_user(self, connector: ClaudeCacheConnector):
-        """Turn 2+: cache breakpoint on previous user message"""
+        """Turn 2+: cache breakpoints on the system prompt and on the message before the newest one"""
         msgs = [
             {"role": "system", "content": "System prompt"},
             {"role": "user", "content": "First question"},
@@ -140,13 +140,15 @@ class TestTransformMessages:
         ]
         result = connector.transform_messages(msgs)
 
-        # Previous user (index 1) should have cache_control
-        prev_user = result[1]["content"]
-        assert isinstance(prev_user, list)
-        assert any(b.get("cache_control") for b in prev_user)
+        # The message before the newest one (index 2) should have cache_control
+        previous_message = result[2]["content"]
+        assert isinstance(previous_message, list)
+        assert any(b.get("cache_control") for b in previous_message)
 
-        # System should remain a plain string (not the cache target)
-        assert result[0]["content"] == "System prompt"
+        # The system prompt keeps its own breakpoint, the other messages stay untouched
+        assert any(b.get("cache_control") for b in result[0]["content"])
+        assert result[1]["content"] == "First question"
+        assert result[3]["content"] == "Second question"
 
         # Latest user should remain a plain string
         assert result[3]["content"] == "Second question"
@@ -197,7 +199,7 @@ class TestApplyCacheControl:
             {"type": "text", "text": "First"},
             {"type": "text", "text": "Second"},
         ]}
-        connector._apply_cache_control(message)
+        connector._apply_cache_control(message, "1h")
         assert "cache_control" not in message["content"][0]
         assert message["content"][1]["cache_control"] == {"type": "ephemeral", "ttl": "1h"}
 
@@ -206,14 +208,14 @@ class TestApplyCacheControl:
             {"type": "text", "text": "Text block"},
             {"type": "image_url", "image_url": {"url": "data:..."}},
         ]}
-        connector._apply_cache_control(message)
+        connector._apply_cache_control(message, "1h")
         # Should apply to the text block (index 0), not the image (index 1)
         assert message["content"][0]["cache_control"] == {"type": "ephemeral", "ttl": "1h"}
         assert "cache_control" not in message["content"][1]
 
     def test_fallback_empty_content(self, connector: ClaudeCacheConnector):
         message = {"content": []}
-        connector._apply_cache_control(message)
+        connector._apply_cache_control(message, "1h")
         assert len(message["content"]) == 1
         assert message["content"][0]["cache_control"] == {"type": "ephemeral", "ttl": "1h"}
 
@@ -251,8 +253,8 @@ class TestFullRoundTrip:
             {"role": "user", "content": "Follow me."},
         ]
         result2 = connector.transform_messages(turn2)
-        assert not self._has_cache_control(result2[0]) # system no longer the target
-        assert self._has_cache_control(result2[1]) # previous user cached
+        assert self._has_cache_control(result2[0]) # system keeps its own breakpoint
+        assert self._has_cache_control(result2[2]) # everything before the new user message is cached
         assert not self._has_cache_control(result2[3]) # new user not cached
 
         # Turn 3
@@ -265,11 +267,11 @@ class TestFullRoundTrip:
             {"role": "user", "content": "Wait here."},
         ]
         result3 = connector.transform_messages(turn3)
-        assert self._has_cache_control(result3[3]) # "Follow me" is now the previous user
+        assert self._has_cache_control(result3[4]) # "Lead the way" is now the message before the newest one
         assert not self._has_cache_control(result3[5]) # "Wait here" is new
 
-    def test_only_one_cache_breakpoint(self, connector: ClaudeCacheConnector):
-        """Exactly one message should have cache_control, never more."""
+    def test_two_cache_breakpoints(self, connector: ClaudeCacheConnector):
+        """The system prompt and the message before the newest one have cache_control, never more."""
         msgs = [
             {"role": "system", "content": "System"},
             {"role": "user", "content": "Q1"},
@@ -280,4 +282,4 @@ class TestFullRoundTrip:
         ]
         result = connector.transform_messages(msgs)
         cached_count = sum(1 for m in result if self._has_cache_control(m))
-        assert cached_count == 1
+        assert cached_count == 2

@@ -110,6 +110,13 @@ class OtherDefinitions:
         return ConfigValueBool("show_http_debug_messages","Show HTTP Debug Messages","Display the JSON going in and out of the server in Mantella.exe's log.", False, tags=[ConfigValueTag.advanced,ConfigValueTag.share_row])
     
     @staticmethod
+    def get_save_console_logs_config_value() -> ConfigValue:
+        description = """Save everything shown in the console to a separate file for each time Mantella is run.
+                        The files are saved to the `logs` folder next to config.ini (My Games/Mantella/logs/console_<date>_<time>.log). The newest 20 files are kept.
+                        Useful for debugging, as the regular logging.log file keeps growing across runs."""
+        return ConfigValueBool("save_console_logs", "Save Console Logs", description, False)
+
+    @staticmethod
     def get_advanced_logs_config_value() -> ConfigValue:
         description = """Save advanced logs to Mantella's My Games/Mantella/logging.log file.
                         Useful for troubleshooting issues."""

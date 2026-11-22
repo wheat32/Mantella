@@ -6,13 +6,16 @@ from src.llm.sentence_content import SentenceContent
 
 class sentence_end_parser(output_parser):
     """Class to cut the LLM output at the end of a sentence."""
+    LINE_END_MARKER = '\x1e' # see sentence_accumulator.LINE_END_MARKER
+
     def __init__(self, end_of_sentence_chars: list[str] = ['.', '?', '!', ';', '。', '？', '！', '；']) -> None:
         super().__init__()
         self.__end_of_sentence_chars = [unicodedata.normalize('NFKC', char) for char in end_of_sentence_chars]
         # Match a standalone period (not part of an ellipsis like .. or ...) or any other end-of-sentence char
         other_chars = [c for c in self.__end_of_sentence_chars if c != '.']
         other_chars_escaped = ''.join([re.escape(c) for c in other_chars])
-        self.__sentence_end_reg = re.compile(rf"^.*?(?:(?<!\.)\.(?!\.)|[{other_chars_escaped}])+")
+        # The sentence accumulator additionally marks line breaks that directly follow an ellipsis as the end of a sentence
+        self.__sentence_end_reg = re.compile(rf"^.*?(?:(?<!\.)\.(?!\.)|[{other_chars_escaped}]|{re.escape(self.LINE_END_MARKER)})+")
 
     def cut_sentence(self, output: str, current_settings: sentence_generation_settings) -> tuple[SentenceContent | None, str]:
         match = self.__sentence_end_reg.match(output)
@@ -21,6 +24,7 @@ class sentence_end_parser(output_parser):
         
         matched_text = match.group()
         rest = output.removeprefix(matched_text)
+        matched_text = matched_text.replace(self.LINE_END_MARKER, '')
         return SentenceContent(current_settings.current_speaker, matched_text, current_settings.sentence_type, False), rest
 
     def modify_sentence_content(self, cut_content: SentenceContent, last_content: SentenceContent | None, settings: sentence_generation_settings) -> tuple[SentenceContent | None, SentenceContent | None]:

@@ -45,13 +45,18 @@ If you have trouble installing the xVASynth version from Nexus, try installing i
         return ConfigValueSelection("tts_service", "TTS Service", "The TTS service used by Mantella.", TTSEnum.PIPER.display_name, options, list(TTSEnum))
 
     @staticmethod
+    def is_xtts_url_local(xtts_url: str) -> bool:
+        """Whether the XTTS URL points to this machine (as opposed to an XTTS server running elsewhere)"""
+        url = str(xtts_url).strip()
+        hostname = urlparse(url if '//' in url else f'//{url}').hostname or ''
+        return hostname in ('localhost', '::1') or hostname.startswith('127.')
+
+    @staticmethod
     def is_xtts_folder_required(tts_service: str, xtts_url: str) -> bool:
         """The XTTS folder is only needed to start the XTTS server, which only happens if XTTS is selected and set to run on this machine"""
         if str(tts_service).strip().lower() != TTSEnum.XTTS.display_name.lower():
             return False
-        url = str(xtts_url).strip()
-        hostname = urlparse(url if '//' in url else f'//{url}').hostname or ''
-        return hostname in ('localhost', '::1') or hostname.startswith('127.')
+        return TTSDefinitions.is_xtts_url_local(xtts_url)
 
     @staticmethod
     def is_xvasynth_folder_required(tts_service: str) -> bool:

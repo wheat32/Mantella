@@ -15,7 +15,7 @@ class ModelProfileDefinitions:
     def get_selected_service_config_value() -> ConfigValue:
         description = """Select the LLM service for the profile you want to create or edit.
                         After selecting a service, choose a model from the available models list below."""
-        options = ["OpenRouter", "OpenAI", "NanoGPT", "KoboldCpp", "textgenwebui"]
+        options = ["OpenRouter", "OpenAI", "Anthropic", "NanoGPT", "KoboldCpp", "textgenwebui"]
         return ConfigValueSelection("profile_selected_service", "Service", description, "OpenRouter", options, allows_free_edit=True)
 
     @staticmethod

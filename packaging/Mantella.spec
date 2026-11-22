@@ -18,7 +18,7 @@ for package in ['gradio', 'gradio_client', 'faster_whisper', 'moonshine_onnx', '
         print(f'WARNING: could not collect files of {package}: {e}')
 
 # Packages that look up their own (or their plugins') installed metadata at runtime
-for distribution in ['gradio', 'gradio_client', 'huggingface_hub', 'tokenizers', 'tqdm', 'requests', 'regex', 'packaging', 'filelock', 'numpy', 'pyyaml',
+for distribution in ['anthropic', 'gradio', 'gradio_client', 'huggingface_hub', 'tokenizers', 'tqdm', 'requests', 'regex', 'packaging', 'filelock', 'numpy', 'pyyaml',
                      'opentelemetry-api', 'opentelemetry-sdk', 'opentelemetry-exporter-otlp-proto-grpc', 'opentelemetry-exporter-otlp-proto-http',
                      'opentelemetry-instrumentation', 'opentelemetry-instrumentation-requests', 'opentelemetry-instrumentation-logging']:
     try:
@@ -26,7 +26,7 @@ for distribution in ['gradio', 'gradio_client', 'huggingface_hub', 'tokenizers',
     except Exception as e:
         print(f'WARNING: could not copy metadata of {distribution}: {e}')
 
-for package in ['src', 'opentelemetry', 'moonshine_onnx', 'sounddevice']:
+for package in ['src', 'opentelemetry', 'moonshine_onnx', 'sounddevice', 'anthropic']:
     hiddenimports += collect_submodules(package)
 
 a = Analysis(

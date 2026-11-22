@@ -15,6 +15,7 @@ from src.conversation.conversation import Conversation
 from src.conversation.context import Context
 from src.character_manager import Character
 import src.utils as utils
+from src import runtime_state
 from src.http.communication_constants import communication_constants as comm_consts
 from src.stt.stt import Transcriber
 from src.actions.function_manager import FunctionManager
@@ -63,6 +64,7 @@ class GameStateManager:
         if self.__talk: #This should only happen if game and server are out of sync due to some previous error -> close conversation and start a new one
             self.__talk.end()
             self.__talk = None
+            runtime_state.set_conversation_active(False)
 
         world_id = "default"
         if input_json.__contains__(comm_consts.KEY_STARTCONVERSATION_WORLDID):
@@ -74,6 +76,7 @@ class GameStateManager:
         
         conversation_client = self._build_random_conversation_client() or self.__client
         context_for_conversation = Context(world_id, self.__config, conversation_client, self.__rememberer, self.__language_info)
+        runtime_state.set_conversation_active(True)
         self.__talk = Conversation(context_for_conversation, self.__chat_manager, self.__rememberer, conversation_client, self.__stt, self.__mic_input, self.__mic_ptt, self.__game)
         self.__update_context(input_json)
         self.__try_preload_voice_model()
@@ -143,7 +146,13 @@ class GameStateManager:
                 # Player input was detected mid-response: tell the game to cut the current voiceline
                 # the game follows up with a player input request, which goes through player_input() normally
                 # (setting __first_line = True) so the streamed first line is correctly muted in-game
-                return {comm_consts.KEY_REPLYTYPE: comm_consts.KEY_REPLYTYPE_INTERRUPTED}
+                if self.__config.instant_interruption:
+                    return {comm_consts.KEY_REPLYTYPE: comm_consts.KEY_REPLYTYPE_INTERRUPTED}
+                # Versions of the mod up to v0.14 do not know the "interrupted" reply and would stop responding.
+                # Instead, the player's input is processed as part of this request: the reply is the same as that of a player input
+                # request, after which the game carries on with the new response (which cuts the interrupted voiceline off in-game)
+                logger.log(23, 'Player interrupted the response')
+                return self.player_input(input_json, update_context=False)
             elif replyType == comm_consts.KEY_REPLYTYPE_NPCACTION:
                 # Action-only response (no voiceline)
                 if sentence_to_play and len(sentence_to_play.actions) > 0:
@@ -176,18 +185,20 @@ class GameStateManager:
             else:
                 self.__talk.end()
                 self.__talk = None # prevent the conversation from being ended (and summarized) a second time
+                runtime_state.set_conversation_active(False)
                 return self.error_message(sentence_to_play.error_message)        
         return reply
 
     @utils.time_it
-    def player_input(self, input_json: dict[str, Any]) -> dict[str, Any]:
+    def player_input(self, input_json: dict[str, Any], update_context: bool = True) -> dict[str, Any]:
         if(not self.__talk ):
             return self.error_message("No running conversation.")
         
         self.__first_line = True
         
         player_text: str = input_json.get(comm_consts.KEY_REQUESTTYPE_PLAYERINPUT, '')
-        self.__update_context(input_json)
+        if update_context:
+            self.__update_context(input_json)
         updated_player_text, update_events, player_spoken_sentence = self.__talk.process_player_input(player_text)
         if update_events:
             return {comm_consts.KEY_REPLYTYPE: comm_consts.KEY_REQUESTTYPE_TTS, comm_consts.KEY_TRANSCRIBE: updated_player_text}
@@ -235,6 +246,7 @@ class GameStateManager:
             end_timestamp = input_json.get(comm_consts.KEY_ENDCONVERSATION_TIMESTAMP, None)
             self.__talk.end(end_timestamp)
             self.__talk = None
+            runtime_state.set_conversation_active(False)
 
         logger.log(24, '\nConversations not starting when you select an NPC? See here:')
         logger.log(25, 'https://art-from-the-machine.github.io/Mantella/pages/issues_qna')
@@ -248,8 +260,8 @@ class GameStateManager:
             # only init Transcriber if mic input is enabled
             if not self.__stt:
                 self.__stt = Transcriber(self.__config)
-            if input_json[comm_consts.KEY_INPUTTYPE] == comm_consts.KEY_INPUTTYPE_PTT:
-                self.__mic_ptt = True
+            # reset on every conversation, so that switching back from push-to-talk to open mic takes effect
+            self.__mic_ptt = input_json[comm_consts.KEY_INPUTTYPE] == comm_consts.KEY_INPUTTYPE_PTT
         else:
             self.__mic_input = False
             if self.__stt:

@@ -19,20 +19,31 @@ For general documentation on Mantella (requirements, settings, troubleshooting),
 - **Voicelines with typographic characters no longer silence the NPC.** Voiceline files are saved under plain ASCII names.
 - **Black screen captures are skipped** (Vision), so that NPCs do not comment on a "black screen".
 - **Linux paths.** Paths in the log and the web UI are shown as they are on your system (eg `/home/you/...` and not `C:\users\steamuser\...`), and path settings accept Linux paths.
+- **The settings page opens in your own browser** when Mantella starts (it is handed to the desktop's default browser instead of looking for one inside the Wine prefix).
 
 ## Conversations
 - NPCs stay in character when your input is unclear, and no longer talk about microphones or speech recognition.
 - Conversations that went wrong because of mishearings are not recorded as such in the NPC's memory.
 - **Name correction** for Moonshine: words that sound like the name of an NPC in the conversation are replaced with that name (eg "roll off" becomes "Ralof"). Can be turned off under `Speech-to-Text` -> `Name Correction`.
-- Changing a setting during a conversation no longer ends the conversation. The change is applied once the conversation is over.
+- **Interrupting NPCs works with push-to-talk**: press the push-to-talk key while an NPC is speaking to cut in. The NPC is told that they were interrupted, and reacts to it in character (a self-important NPC may take offence, a follower will not mind). Requires `Speech-to-Text` -> `Allow Interruption` and `Push-to-Talk` in the Mantella UI. With the Mantella v0.14 mod the interrupted voiceline stops once the NPC starts to respond to you; cutting it off instantly needs newer mod scripts (`Instant Interruption`).
+- A line that ends in an ellipsis ("I wonder...") is treated as a finished sentence, so that in conversations with several NPCs the next speaker's line is no longer read out by the previous speaker. An ellipsis in the middle of a line is still a pause.
+- When an NPC's memories no longer fit into the prompt, the oldest memories are left out first, instead of all of them.
+- Changing a setting during a conversation no longer ends the conversation. The change is applied once the conversation is over, and the UI says so.
 - A failing LLM no longer leaves Mantella retrying a conversation summary forever, and a failed attempt to condense an NPC's memories no longer hides the memories they already have.
+
+## Language models
+- **Anthropic service**: connect to Claude directly (`Large Language Model` -> `LLM Service` -> `Anthropic`), with prompt caching applied the way the Claude API expects it. Put your Anthropic API key in `GPT_SECRET_KEY.txt` (or under `"Anthropic"` in `secret_keys.json`).
+- Prompt caching for Claude via OpenRouter now also caches the system prompt separately and covers requests that follow a tool call.
+- Claude models have a known context size, also when the model list has not been loaded.
+- Requests to the LLM time out (`Large Language Model` -> `Response Timeout`, 60 seconds by default) instead of leaving a conversation hanging, and are retried quietly on rate limits and server errors.
 
 ## Web UI
 - **NPC Memories** tab to view, edit and delete what NPCs remember.
 - **Console** below the settings, with errors in red and warnings in yellow.
 - **Restart Mantella** and **Stop Mantella** buttons.
 - The UI stays responsive while Mantella waits for you to speak.
-- Folders of TTS services that are not in use (or that run on another machine) are no longer flagged as errors.
+- Folders of TTS services that are not in use (or that run on another machine) are no longer flagged as errors, and the options of a local XTTS server are hidden while the XTTS URL points to another machine.
+- `Other` -> `Save Console Logs` saves the console output of each run to its own file (`My Games/Mantella/logs`), for debugging.
 
 > The default prompts have changed. Prompts are stored in your `config.ini`, so to get the new versions on an existing installation, click `Default` next to the prompts in the `Prompts` tab of the Mantella UI (Skyrim Prompt, Skyrim Multi-NPC Prompt, Memory Prompt, Resummarize Prompt).
 

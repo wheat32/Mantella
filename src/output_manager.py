@@ -180,6 +180,7 @@ class ChatManager:
             Sentence | None: _description_
         """
 
+        content.text = content.text.replace(sentence_accumulator.LINE_END_MARKER, '') # internal marker that must never reach the TTS or the game
         character_to_talk = content.speaker
         text = ' ' + content.text + ' '
         
