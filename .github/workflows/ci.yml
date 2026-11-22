@@ -58,6 +58,8 @@ jobs:
         run: |
           ls dist/Mantella-Skyrim-*.zip
           unzip -l dist/Mantella-Skyrim-*.zip | grep -q "SKSE/Plugins/MantellaSoftware/Mantella.exe"
+          unzip -l dist/Mantella-Skyrim-*.zip | grep -q " Mantella.esp"
+          unzip -l dist/Mantella-Skyrim-*.zip | grep -q "SKSE/Plugins/MantellaSoftware/piper/piper.exe"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7

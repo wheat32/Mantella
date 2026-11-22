@@ -1,0 +1,11 @@
+FormKey: 000803:Mantella.esp
+EditorID: giafac_Mantella
+Name:
+  TargetLanguage: English
+  Value: giafac_Mantella
+Flags:
+- CanBeOwner
+CrimeValues:
+  Arrest: True
+  AttackOnSight: True
+VendorValues: {}

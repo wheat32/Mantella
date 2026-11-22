@@ -18,6 +18,7 @@ For general documentation on Mantella (requirements, settings, troubleshooting),
 - **Lip sync works.** FaceFXWrapper is called directly with absolute paths (previously through a `.bat` file written into the mod folder), and its output and exit code are logged when it fails.
 - **Voicelines with typographic characters no longer silence the NPC.** Voiceline files are saved under plain ASCII names.
 - **Black screen captures are skipped** (Vision), so that NPCs do not comment on a "black screen".
+- **Vision works in Skyrim under Proton**: with `Vision` -> `Use Game Screenshots` enabled, the game takes the screenshot itself (Mantella presses the Print Screen key and reads the file the game saves), instead of Mantella trying to capture the game window from the outside.
 - **Linux paths.** Paths in the log and the web UI are shown as they are on your system (eg `/home/you/...` and not `C:\users\steamuser\...`), and path settings accept Linux paths.
 - **The settings page opens in your own browser** when Mantella starts (it is handed to the desktop's default browser instead of looking for one inside the Wine prefix).
 
@@ -49,13 +50,19 @@ For general documentation on Mantella (requirements, settings, troubleshooting),
 
 # Installation
 
-The releases of this fork contain the Mantella software only (`Mantella.exe` and its files). The game plugin, scripts and SKSE plugins come from the original mod.
+The releases of this fork replace the Mantella mod from Nexus Mods: the archive contains the game plugin, scripts, the Mantella software, the Piper text-to-speech program and the Moonshine speech-to-text model. Two things are not included (yet):
 
-1. Install [Mantella](https://www.nexusmods.com/skyrimspecialedition/mods/98631) from Nexus Mods and its requirements with your mod manager.
-2. Download `Mantella-Skyrim-<version>.zip` from the [latest release](../../releases/latest) and install it as a separate mod ("Install a new mod from an archive" in Mod Organizer 2).
-3. Let it overwrite Mantella: in Mod Organizer 2, place it below Mantella in the mod list. In Vortex, set it to load after Mantella.
+- **Piper voice models** (4 GB). These are part of the [Mantella](https://www.nexusmods.com/skyrimspecialedition/mods/98631) download on Nexus Mods.
+- **The SKSE plugins** (`MantellaDialogue.dll`, `MantellaLauncher.dll`, `MantellaSubtitles.dll`, `SKSE_HTTP.dll`). On Skyrim 1.7.99 and newer, use the plugins from the [Mantella 1.7.104 SKSE Plugin Fix](https://www.nexusmods.com/skyrimspecialedition/mods/195872). On older versions of the game, use the ones in the Mantella download.
 
-To go back to the original software, disable or remove the mod.
+Steps (Mod Organizer 2):
+
+1. Install the requirements of Mantella: [SKSE64](https://www.nexusmods.com/skyrimspecialedition/mods/30379), [Address Library for SKSE Plugins](https://www.nexusmods.com/skyrimspecialedition/mods/32444), [SkyUI](https://www.nexusmods.com/skyrimspecialedition/mods/12604), [UIExtensions](https://www.nexusmods.com/skyrimspecialedition/mods/17561) and the FonixData file.
+2. Download `Mantella-Skyrim-<version>.zip` from the [latest release](../../releases/latest) and install it ("Install a new mod from an archive").
+3. Voices: create an empty mod (eg "Mantella Voices") and copy the folder `SKSE/Plugins/MantellaSoftware/piper/models` from the Mantella download on Nexus Mods into it, keeping that folder structure.
+4. SKSE plugins: keep the SKSE Plugin Fix installed (or, on older game versions, copy the four `.dll` files from `SKSE/Plugins` of the Mantella download into a mod of their own).
+5. Paste your LLM secret key into `GPT_SECRET_KEY.txt` in the installed mod's folder.
+6. Disable the Mantella mod from Nexus Mods. Its files are no longer needed.
 
 # Development
 
@@ -76,6 +83,17 @@ On Windows, use `py -3.11 -m venv .venv`, `.\.venv\Scripts\Activate` and `pip in
 ```bash
 pytest -q -m "not requires_audio and not requires_external_exe and not requires_llm"
 ```
+
+## Repository layout
+
+| Folder | Contents |
+|---|---|
+| `src/`, `data/`, `main.py` | The Mantella software (Python), built into `Mantella.exe` |
+| `mod/` | The Skyrim mod: `Mantella.esp`, Papyrus scripts (`Scripts/Source/*.psc` and their compiled `Scripts/*.pex`), voice files and FaceFXWrapper. Laid out like the game's `Data` folder. Based on [Mantella Spell](https://github.com/art-from-the-machine/Mantella-Spell) v0.14 |
+| `third_party/` | Programs and models that ship with the mod as they are: the Piper runtime (without voices) and the Moonshine model |
+| `packaging/` | Scripts that build `Mantella.exe` and assemble the mod archive |
+
+The compiled scripts in `mod/Scripts` have to be kept in step with their sources by hand: when a `.psc` file is changed, its `.pex` has to be recompiled (with the Papyrus compiler of the Creation Kit, or [Pyro](https://github.com/fireundubh/pyro) using `skyrimse.ppj` of Mantella Spell) and committed along with it.
 
 ## Building a mod archive to test with
 
@@ -102,7 +120,11 @@ Every push to `main` runs the tests, builds the mod archive and publishes it as 
 - Mantella (upstream): [https://github.com/art-from-the-machine/Mantella](https://github.com/art-from-the-machine/Mantella)
 - Mantella Spell (the Skyrim mod that talks to this software): [https://github.com/art-from-the-machine/Mantella-Spell](https://github.com/art-from-the-machine/Mantella-Spell)
 
-# Attributions
-Mantella is created by [art-from-the-machine](https://github.com/art-from-the-machine) and its contributors.
+# Licenses and attributions
+Mantella is created by [art-from-the-machine](https://github.com/art-from-the-machine) and its contributors. The Mantella software (this repo, excluding the folders below) is licensed under the [GNU Affero General Public License v3](LICENSE), as it is upstream.
+
+- `mod/`: [Mantella Spell](https://github.com/art-from-the-machine/Mantella-Spell) by art-from-the-machine, MIT License (`mod/LICENSE.md`). `mod/Sound/Voice/Processing/FaceFXWrapper.exe` is [FaceFXWrapper](https://github.com/Nukem9/FaceFXWrapper) by Nukem, MIT License.
+- `third_party/piper`: [Piper](https://github.com/rhasspy/piper) by Michael Hansen, MIT License. It includes [eSpeak NG](https://github.com/espeak-ng/espeak-ng), GPL v3.
+- `third_party/moonshine`: [Moonshine](https://github.com/usefulsensors/moonshine) by Useful Sensors, MIT License.
 
 Mantella uses material from the "[Skyrim: Characters](https://elderscrolls.fandom.com/wiki/Category:Skyrim:_Characters)" articles on the [Elder Scrolls wiki](https://elderscrolls.fandom.com/wiki/The_Elder_Scrolls_Wiki) at [Fandom](https://www.fandom.com/) and is licensed under the [Creative Commons Attribution-Share Alike License](https://creativecommons.org/licenses/by-sa/3.0/).

@@ -9,7 +9,8 @@ import ctypes
 from pathlib import Path
 from src.config.definitions.game_definitions import GameEnum
 import platform
-from src.wine import is_running_under_wine
+from src.wine import is_running_under_wine, to_host_path
+import time
 
 if platform.system() == "Windows":
     import win32gui
@@ -71,8 +72,12 @@ class ImageManager:
 
         self.__capture_params = None
         self.__has_black_screenshot_warning_happened: bool = False
-        # In-game screenshots are taken by the Fallout 4 mod only
-        self.__game_screenshots_supported: bool = game.base_game == GameEnum.FALLOUT4
+        self.__has_game_screenshot_warning_happened: bool = False
+        self.__is_skyrim: bool = game.base_game == GameEnum.SKYRIM
+        # Fallout 4: the mod saves a screenshot for Mantella to pick up.
+        # Skyrim: Mantella presses the game's own screenshot key and picks up the file the game saves to its folder
+        self.__game_folder: str | None = game_image_path
+        self.__game_screenshots_supported: bool = game.base_game == GameEnum.FALLOUT4 or (self.__is_skyrim and bool(game_image_path))
 
         if platform.system() != "Windows":
             return
@@ -234,6 +239,68 @@ class ImageManager:
         return np.array(screenshot), width, height
     
 
+    SKYRIM_SCREENSHOT_EXTENSIONS = ('.png', '.bmp', '.jpg', '.tga')
+
+    def _find_skyrim_screenshots(self) -> set[str]:
+        """The screenshots (ScreenShot<number>.png by default) currently in the game folder"""
+        try:
+            return {os.path.join(self.__game_folder, f) for f in os.listdir(self.__game_folder)
+                    if f.lower().startswith('screenshot') and f.lower().endswith(self.SKYRIM_SCREENSHOT_EXTENSIONS)}
+        except OSError:
+            return set()
+
+    @staticmethod
+    def _press_screenshot_key() -> None:
+        """Presses the Print Screen key, which Skyrim takes a screenshot on"""
+        VK_SNAPSHOT, DIK_SYSRQ, KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP = 0x2C, 0xB7, 0x1, 0x2
+        user32 = ctypes.windll.user32
+        user32.keybd_event(VK_SNAPSHOT, DIK_SYSRQ, KEYEVENTF_EXTENDEDKEY, 0)
+        time.sleep(0.05)
+        user32.keybd_event(VK_SNAPSHOT, DIK_SYSRQ, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0)
+
+    @utils.time_it
+    def _take_skyrim_screenshot(self, timeout: float = 2.0) -> tuple[np.ndarray, int, int] | None:
+        '''Has Skyrim take a screenshot of itself and loads it, removing the file afterwards.
+        Unlike capturing the game window from the outside, this also works where the window cannot be captured (eg under Wine / Proton)
+
+        Returns:
+            The screenshot as a numpy array with its width and height, or None if the game did not save a screenshot in time
+        '''
+        existing_screenshots = self._find_skyrim_screenshots()
+        self._press_screenshot_key()
+
+        new_screenshot: str | None = None
+        deadline = time.time() + timeout
+        while time.time() < deadline and not new_screenshot:
+            time.sleep(0.05)
+            new_files = self._find_skyrim_screenshots() - existing_screenshots
+            if new_files:
+                new_screenshot = max(new_files, key=os.path.getmtime)
+
+        if not new_screenshot:
+            if not self.__has_game_screenshot_warning_happened:
+                self.__has_game_screenshot_warning_happened = True
+                logger.warning(f'Skyrim did not save a screenshot to "{to_host_path(self.__game_folder)}" after the Print Screen key was pressed, so no image will be sent to the LLM. Make sure the game window is focused and that screenshots are enabled in the game (bAllowScreenShot=1 under [Display] in Skyrim.ini). If this keeps happening, disable `Vision`->`Use Game Screenshots` in the Mantella UI')
+            return None
+
+        # wait until the game has finished writing the file
+        screenshot = None
+        while time.time() < deadline + 1.0:
+            screenshot = cv2.imread(new_screenshot)
+            if screenshot is not None:
+                break
+            time.sleep(0.05)
+        try:
+            os.remove(new_screenshot)
+        except OSError as e:
+            logger.debug(f'Could not remove screenshot {new_screenshot}: {e}')
+        if screenshot is None:
+            return None
+
+        height, width = screenshot.shape[:2]
+        return screenshot, width, height
+
+
     @utils.time_it
     def _encode_image_to_jpeg(self, screenshot):
         return cv2.imencode('.jpg', screenshot, [cv2.IMWRITE_JPEG_QUALITY, self.__image_quality])[1]
@@ -252,17 +319,21 @@ class ImageManager:
             return None
 
         try:
-            params = self.capture_params
-            if not params:
-                return None
-  
             # Capture
-            if self.__use_game_screenshots and self.__game_image_file_path is not None:
+            if self.__use_game_screenshots and self.__is_skyrim and self.__game_folder:
+                captured = self._take_skyrim_screenshot()
+                if captured is None:
+                    return None
+                screenshot, width, height = captured
+            elif self.__use_game_screenshots and self.__game_image_file_path is not None:
                 if os.path.exists(self.__game_image_file_path):
                     screenshot, width, height = self._get_screenshot()
                 else:
                     return None
             else:
+                params = self.capture_params
+                if not params:
+                    return None
                 screenshot, width, height = self._take_screenshot(params)
                 if self._is_blank(screenshot):
                     # A blank capture tells the LLM nothing, and can lead to NPCs commenting on the "black screen"

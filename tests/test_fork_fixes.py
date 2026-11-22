@@ -137,3 +137,27 @@ def test_console_log_file(tmp_path):
 def test_xtts_url_local():
     assert TTSDefinitions.is_xtts_url_local("http://127.0.0.1:8020")
     assert not TTSDefinitions.is_xtts_url_local("http://192.168.1.50:8020")
+
+
+def test_skyrim_game_screenshot(tmp_path, monkeypatch):
+    import cv2
+    import src.image.image_manager as image_manager_module
+    from src.config.definitions.game_definitions import GameEnum
+
+    monkeypatch.setattr(image_manager_module.platform, "system", lambda: "Linux") # skip Windows-only setup
+    manager = ImageManager(GameEnum.SKYRIM, str(tmp_path), False, 80, False, "Nearest", {}, True, str(tmp_path))
+    (tmp_path / "ScreenShot0.png").write_bytes(b"an older screenshot of the player") # must be left alone
+
+    def press_key():
+        cv2.imwrite(str(tmp_path / "ScreenShot1.png"), np.full((90, 160, 3), 120, dtype=np.uint8))
+    monkeypatch.setattr(manager, "_press_screenshot_key", press_key)
+
+    screenshot, width, height = manager._take_skyrim_screenshot(timeout=1.0)
+    assert (width, height) == (160, 90)
+    assert screenshot.shape == (90, 160, 3)
+    assert not (tmp_path / "ScreenShot1.png").exists() # removed after reading
+    assert (tmp_path / "ScreenShot0.png").exists()
+
+    # no screenshot appears: no image, no crash
+    monkeypatch.setattr(manager, "_press_screenshot_key", lambda: None)
+    assert manager._take_skyrim_screenshot(timeout=0.2) is None

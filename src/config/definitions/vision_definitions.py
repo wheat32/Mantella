@@ -85,7 +85,8 @@ class VisionDefinitions:
     
     @staticmethod
     def get_use_game_screenshots_config_value() -> ConfigValue:
-        description = """Whether to use screenshots taken in-game instead of relying on Mantella to capture the game window (Fallout 4 only).
-                        Enable this setting to improve screenshot capture reliability. Otherwise please ensure your game window is visible on screen when running and is not blocked by other windows.
-                        If enabled, please ensure you configure screenshot capture settings in the Mantella Pip-Boy settings window."""
+        description = """Whether to use screenshots taken by the game itself instead of relying on Mantella to capture the game window.
+                        Enable this setting to improve screenshot capture reliability, or if NPCs cannot see your surroundings (when running the game on Linux via Proton, capturing the game window usually results in a black image).
+                        Skyrim: Mantella presses the Print Screen key for the game to take a screenshot, which is removed from the game folder again after it has been read. Requires the game window to be focused, and Mantella to be started by the game.
+                        Fallout 4: please ensure you configure screenshot capture settings in the Mantella Pip-Boy settings window."""
         return ConfigValueBool("use_game_screenshots", "Use Game Screenshots", description, False, tags=[ConfigValueTag.advanced])

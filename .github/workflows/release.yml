@@ -96,7 +96,7 @@ jobs:
 
             **Commit message:** ${{ github.event.head_commit.message }}
 
-            > **This is not the complete mod.** The archive contains the Mantella software only. You also need the [Mantella mod](https://www.nexusmods.com/skyrimspecialedition/mods/98631) from Nexus Mods and its requirements, which provide the game plugin, scripts and SKSE plugins.
+            > Replaces the [Mantella mod](https://www.nexusmods.com/skyrimspecialedition/mods/98631) from Nexus Mods. **Not included:** the Piper voice models and the SKSE plugins (`.dll` files). See the [installation steps](https://github.com/${{ github.repository }}/blob/main/README.md#installation) for where to get them.
 
             ## Downloads
 
@@ -106,11 +106,10 @@ jobs:
 
             ## Installation
 
-            1. Install [Mantella](https://www.nexusmods.com/skyrimspecialedition/mods/98631) and its requirements with your mod manager.
-            2. Install `Mantella-Skyrim-${{ steps.tag.outputs.VERSION }}.zip` as a separate mod ("Install a new mod from an archive" in Mod Organizer 2).
-            3. Let it overwrite Mantella. In Mod Organizer 2, place it below Mantella in the mod list. In Vortex, set it to load after Mantella.
-
-            To go back to the original software, disable or remove this mod.
+            1. Install `Mantella-Skyrim-${{ steps.tag.outputs.VERSION }}.zip` with your mod manager ("Install a new mod from an archive" in Mod Organizer 2).
+            2. Add the Piper voice models and the SKSE plugins as described in the [README](https://github.com/${{ github.repository }}/blob/main/README.md#installation).
+            3. Paste your LLM secret key into `GPT_SECRET_KEY.txt` in the installed mod's folder.
+            4. Disable the Mantella mod from Nexus Mods.
 
             > This is a community build, a fork of [Mantella](https://github.com/art-from-the-machine/Mantella) with fixes for Skyrim and for Linux (Proton). See the [README](https://github.com/${{ github.repository }}/blob/main/README.md) for what is different.
           files: |

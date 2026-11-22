@@ -28,3 +28,5 @@ data/voice_model_data_log_xtts.csv
 .vscode/
 .coverage
 moonshine/
+# Third-party runtime files shipped in the mod archive
+!third_party/moonshine/
