@@ -28,6 +28,8 @@ bool property showReminderMessages auto
 int property MantellaStartHotkey auto
 int property MantellaListenerTextHotkey auto
 int property MantellaEndHotkey auto
+int property MantellaToggleHotkey auto
+int property MantellaEndConversationHotkey auto
 int property MantellaCustomGameEventHotkey auto
 int property MantellaRadiantHotkey auto
 
@@ -124,6 +126,10 @@ endEvent
 ; and add the corresponding default value here in a block corresponding to the version number like the examples below
 ; Doing it like this will only assign the defaul values to settings that haven't been initialised prior.
 function assignDefaultSettings(int lastVersion, bool isFirstInit = false)
+    If (lastVersion < 8 || isFirstInit)
+        MantellaToggleHotkey = -1
+        MantellaEndConversationHotkey = -1
+    EndIf
     If (lastVersion < 7 || isFirstInit)
         enableVanillaDialogueAwareness = true
     EndIf
@@ -243,6 +249,20 @@ function BindEndHotkey(int keyCode)
     RegisterForKey(keyCode)
 endfunction
 
+function BindToggleHotkey(int keyCode)
+    ;used by the MCM_GeneralSettings when updating the toggle hotkey KeyMapChange
+    UnregisterForKey(MantellaToggleHotkey)
+    MantellaToggleHotkey=keyCode
+    RegisterForKey(keyCode)
+endfunction
+
+function BindEndConversationHotkey(int keyCode)
+    ;used by the MCM_GeneralSettings when updating the end conversation hotkey KeyMapChange
+    UnregisterForKey(MantellaEndConversationHotkey)
+    MantellaEndConversationHotkey=keyCode
+    RegisterForKey(keyCode)
+endfunction
+
 function BindCustomGameEventHotkey(int keyCode)
     ;used by the MCM_GeneralSettings when updating the custom game event hotkey KeyMapChange
     UnregisterForKey(MantellaCustomGameEventHotkey)
@@ -299,6 +319,24 @@ Event OnKeyDown(int KeyCode)
             if (targetRef) ;If we have a target under the crosshair, cast sepll on it
                 MantellaRemoveNpcSpell.cast(PlayerRef, targetRef)
             else
+                MantellaEndSpell.cast(PlayerRef)
+            endIf
+        elseIf KeyCode == MantellaToggleHotkey
+            ; One key for both directions: an NPC who is not in the conversation is added to it (starting one if needed),
+            ; an NPC who is in the conversation is removed from it. Without an NPC under the crosshair the key does nothing
+            Actor targetRef = (Game.GetCurrentCrosshairRef() as actor)
+            if (targetRef)
+                MantellaConversation conversation = Quest.GetQuest("MantellaConversation") as MantellaConversation
+                if (conversation.IsRunning() && conversation.IsActorInConversation(targetRef))
+                    MantellaRemoveNpcSpell.cast(PlayerRef, targetRef)
+                else
+                    MantellaSpell.cast(PlayerRef, targetRef)
+                endIf
+            endIf
+        elseIf KeyCode == MantellaEndConversationHotkey
+            ; Ends the whole conversation, no matter what is under the crosshair
+            MantellaConversation conversation = Quest.GetQuest("MantellaConversation") as MantellaConversation
+            if (conversation.IsRunning())
                 MantellaEndSpell.cast(PlayerRef)
             endIf
         elseIf KeyCode == MantellaCustomGameEventHotkey

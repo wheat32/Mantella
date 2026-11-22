@@ -209,7 +209,9 @@ function ContinueConversation(string nextAction, int handle)
         If (SKSE_HTTP.getBool(handle, "mantella_stop_voiceline", false))
             StopCurrentVoiceline()
         EndIf
-        sendRequestForPlayerInput("", updateContext=False)
+        ; The context is rebuilt: sending the previous one again would repeat in-game events Mantella has already been told about
+        sendRequestForPlayerInput("", updateContext=True)
+        ShowRepeatingMessage("Listening...")
     elseIf(nextAction == mConsts.KEY_REPLYTYPE_NPCACTION)
         int npcActionHandle = SKSE_HTTP.getNestedDictionary(handle, mConsts.KEY_REPLYTYPE_NPCACTION)
         ProcessNpcAction(npcActionHandle)
@@ -462,7 +464,7 @@ endFunction
 ;       End conversation      ;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-event OnEndConversationActionReceived(Form speaker, string sentence)
+event OnEndConversationActionReceived(Form speaker)
     EndConversation()
 endEvent
 
@@ -475,6 +477,8 @@ Function EndConversation()
 EndFunction
 
 Function CleanupConversation()
+    ; A reply that is still on its way must not continue a conversation that has been cleaned up
+    _hasBeenStopped = true
     int i = 0
     ClearParticipants()
     ClearRepeatingMessage()
@@ -502,7 +506,7 @@ EndFunction
 ;      Remove character       ;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-event OnRemoveCharacterActionReceived(Form speaker, string sentence)
+event OnRemoveCharacterActionReceived(Form speaker)
     Actor[] actors = new Actor[2]
     actors[0] = speaker as Actor
     RemoveActors(actors)
@@ -795,7 +799,7 @@ endEvent
 ; Action: Reload conversation ;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-event OnReloadConversationActionReceived(Form speaker, string sentence)
+event OnReloadConversationActionReceived(Form speaker)
     ; Debug.Notification("OnReloadConversationActionReceived triggered")
     AddExtraRequestAction(mConsts.ACTION_RELOADCONVERSATION)
 endEvent
@@ -824,6 +828,10 @@ endEvent
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;            Utils            ;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+bool Function IsActorInConversation(Actor actorToCheck)
+    return actorToCheck != None && Participants.HasForm(actorToCheck)
+EndFunction
 
 bool Function IsPlayerInConversation()
     int i = 0
@@ -1129,10 +1137,10 @@ endFunction
 
 Function ShowRepeatingMessage(string messageToShow)
     _repeatingMessage = messageToShow
+    Debug.Notification(_repeatingMessage)
+    ; Repeat the message (see OnUpdate) only if reminders are enabled
     if repository.showReminderMessages
-        Debug.Notification(_repeatingMessage)
-    else
-        RegisterForSingleUpdate(0)
+        RegisterForSingleUpdate(10)
     endIf
 EndFunction
 

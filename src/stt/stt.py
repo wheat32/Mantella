@@ -201,6 +201,10 @@ def _sounds_like(candidate: str, name: str) -> bool:
     return SequenceMatcher(None, candidate, name).ratio() >= 0.75
 
 
+class ListeningCancelled(Exception):
+    """Raised to whoever is waiting for the player to speak when that wait is called off (eg because the conversation is being ended)"""
+
+
 class Transcriber:
     """Handles real-time speech-to-text transcription using Moonshine."""
     
@@ -324,6 +328,7 @@ class Transcriber:
         self._last_update_time = 0
         self._current_transcription = ""
         self._transcription_ready = threading.Event()
+        self._cancel_waiting = threading.Event()
         self._consecutive_empty_count = 0
         self._max_consecutive_empty = 10
 
@@ -762,6 +767,12 @@ If you would prefer to run speech-to-text locally, please ensure the `Speech-to-
             timeout_value = silence_timeout if use_timeout else None
             
             received_transcription = self._transcription_ready.wait(timeout=timeout_value)
+
+            if self._cancel_waiting.is_set():
+                with self._lock:
+                    if not self._current_transcription:
+                        self._transcription_ready.clear()
+                raise ListeningCancelled()
             
             if not received_transcription and use_timeout and not self._speech_detected:
                 logger.log(self.loglevel, f"Silence timeout of {silence_timeout} seconds reached without speech")
@@ -789,6 +800,15 @@ If you would prefer to run speech-to-text locally, please ensure the `Speech-to-
 
             time.sleep(0.1)
 
+
+    def cancel_waiting(self) -> None:
+        """Wakes up a call to get_latest_transcription that is waiting for the player to speak, making it raise ListeningCancelled.
+        With push-to-talk that wait would otherwise only end once the player presses the key and says something"""
+        self._cancel_waiting.set()
+        self._transcription_ready.set()
+
+    def clear_cancel_waiting(self) -> None:
+        self._cancel_waiting.clear()
 
     def stop_listening(self) -> None:
         """Stop listening for speech."""

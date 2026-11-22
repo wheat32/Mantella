@@ -228,7 +228,7 @@ class Piper(TTSable):
                 cwd=self._voiceline_folder, 
                 stdin=subprocess.PIPE, 
                 stdout=subprocess.PIPE, 
-                stderr=subprocess.PIPE, 
+                stderr=subprocess.DEVNULL, # never read: a pipe would fill up and stall Piper if it writes enough to it
                 universal_newlines=True, 
                 encoding='utf-8',
                 bufsize=1, 
@@ -245,6 +245,27 @@ class Piper(TTSable):
             utils.play_error_sound()
             logger.error(f'Could not run Piper. Ensure that the path "{self.__piper_path}" is correct. Error: {e}')
             raise TTSServiceFailure()
+
+    def shutdown(self):
+        """Stops the Piper process. Without this, every change of settings would leave another piper.exe running"""
+        super().shutdown()
+        self.stop_thread = True
+        process = getattr(self, 'process', None)
+        if not process:
+            return
+        try:
+            if process.stdin:
+                process.stdin.close()
+        except Exception:
+            pass
+        try:
+            process.terminate()
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+        except Exception as e:
+            logger.debug(f'Could not stop Piper: {e}')
+        self.process = None
 
     @utils.time_it
     def _restart_piper(self):

@@ -93,7 +93,7 @@ cmake -S "$repo/skse" -B "$build_dir" -G Ninja \
     -DVCPKG_OVERLAY_PORTS="$cross/custom-ports" \
     -DXWIN_SYSROOT="$XWIN_SYSROOT" \
     -DFETCHCONTENT_SOURCE_DIR_COMMONLIBSSE_NG="$commonlib" \
-    -DCMAKE_CXX_FLAGS="/permissive- /bigobj /DUNICODE /D_UNICODE /clang:-ffile-prefix-map=$repo=. -Wno-overloaded-virtual -Wno-delete-non-abstract-non-virtual-dtor -Wno-inconsistent-missing-override -Wno-reinterpret-base-class -Wno-nonportable-include-path -Wno-deprecated-copy-with-user-provided-copy -Wno-invalid-offsetof -Wno-switch -Wno-unused-command-line-argument -Wno-deprecated-volatile -Wno-unused-private-field"
+    -DCMAKE_CXX_FLAGS="/permissive- /bigobj /clang:-ffile-prefix-map=$repo=. -Wno-overloaded-virtual -Wno-delete-non-abstract-non-virtual-dtor -Wno-inconsistent-missing-override -Wno-reinterpret-base-class -Wno-nonportable-include-path -Wno-deprecated-copy-with-user-provided-copy -Wno-invalid-offsetof -Wno-switch -Wno-unused-command-line-argument -Wno-deprecated-volatile -Wno-unused-private-field"
 
 echo "== Building..."
 cmake --build "$build_dir"

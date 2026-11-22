@@ -27,6 +27,7 @@ For general documentation on Mantella (requirements, settings, troubleshooting),
 - Conversations that went wrong because of mishearings are not recorded as such in the NPC's memory.
 - **Name correction** for Moonshine: words that sound like the name of an NPC in the conversation are replaced with that name (eg "roll off" becomes "Ralof"). Can be turned off under `Speech-to-Text` -> `Name Correction`.
 - **Interrupting NPCs works with push-to-talk**: press the push-to-talk key while an NPC is speaking and they stop talking straight away. The NPC is told that they were interrupted, and reacts to it in character (a self-important NPC may take offence, a follower will not mind). Requires `Speech-to-Text` -> `Allow Interruption` and `Push-to-Talk` in the Mantella UI.
+- **New keybinds** in the mod's settings menu (General -> Controls): `Toggle NPC in Conversation` adds the NPC you are looking at to the conversation, or removes them if they are already in it. `End Conversation` ends the whole conversation, whatever you are looking at.
 - A line that ends in an ellipsis ("I wonder...") is treated as a finished sentence, so that in conversations with several NPCs the next speaker's line is no longer read out by the previous speaker. An ellipsis in the middle of a line is still a pause.
 - When an NPC's memories no longer fit into the prompt, the oldest memories are left out first, instead of all of them.
 - Changing a setting during a conversation no longer ends the conversation. The change is applied once the conversation is over, and the UI says so.

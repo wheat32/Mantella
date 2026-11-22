@@ -161,3 +161,25 @@ def test_skyrim_game_screenshot(tmp_path, monkeypatch):
     # no screenshot appears: no image, no crash
     monkeypatch.setattr(manager, "_press_screenshot_key", lambda: None)
     assert manager._take_skyrim_screenshot(timeout=0.2) is None
+
+
+def test_waiting_for_speech_can_be_cancelled():
+    """A request that waits for the player to speak can be called off (eg to end the conversation while push-to-talk is idle)"""
+    import threading
+    import pytest
+    from src.stt.stt import Transcriber, ListeningCancelled
+
+    transcriber = Transcriber.__new__(Transcriber) # only the state used by get_latest_transcription is set up
+    transcriber._transcription_ready = threading.Event()
+    transcriber._cancel_waiting = threading.Event()
+    transcriber._lock = threading.Lock()
+    transcriber._current_transcription = ''
+    transcriber._speech_detected = False
+
+    threading.Timer(0.1, transcriber.cancel_waiting).start()
+    with pytest.raises(ListeningCancelled):
+        transcriber.get_latest_transcription.__wrapped__(transcriber) if hasattr(transcriber.get_latest_transcription, '__wrapped__') else transcriber.get_latest_transcription()
+
+    transcriber.clear_cancel_waiting()
+    assert not transcriber._cancel_waiting.is_set()
+    assert not transcriber._transcription_ready.is_set()

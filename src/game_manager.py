@@ -17,7 +17,7 @@ from src.character_manager import Character
 import src.utils as utils
 from src import runtime_state
 from src.http.communication_constants import communication_constants as comm_consts
-from src.stt.stt import Transcriber
+from src.stt.stt import Transcriber, ListeningCancelled
 from src.actions.function_manager import FunctionManager
 from src.random_llm_selector import RandomLLMSelector, LLMSelection
 from src.llm.client_base import ClientBase
@@ -53,6 +53,15 @@ class GameStateManager:
         self.__chat_manager.clear_per_character_client_cache()
         self.__random_selector = RandomLLMSelector()
 
+
+    def cancel_listening(self) -> None:
+        """Calls off a request that is waiting for the player to speak, so that the next request can be handled"""
+        if self.__stt:
+            self.__stt.cancel_waiting()
+
+    def clear_listening_cancel(self) -> None:
+        if self.__stt:
+            self.__stt.clear_cancel_waiting()
 
     @property
     def is_conversation_active(self) -> bool:
@@ -202,7 +211,12 @@ class GameStateManager:
         player_text: str = input_json.get(comm_consts.KEY_REQUESTTYPE_PLAYERINPUT, '')
         if update_context:
             self.__update_context(input_json)
-        updated_player_text, update_events, player_spoken_sentence = self.__talk.process_player_input(player_text)
+        try:
+            updated_player_text, update_events, player_spoken_sentence = self.__talk.process_player_input(player_text)
+        except ListeningCancelled:
+            # Another request (eg ending the conversation) is waiting to be handled, and takes it from here
+            logger.log(23, 'Stopped waiting for player input')
+            return {comm_consts.KEY_REPLYTYPE: comm_consts.KEY_REPLYTYPE_NPCTALK}
         if update_events:
             return {comm_consts.KEY_REPLYTYPE: comm_consts.KEY_REQUESTTYPE_TTS, comm_consts.KEY_TRANSCRIBE: updated_player_text}
 

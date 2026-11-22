@@ -36,6 +36,7 @@ class mantella_route(routeable):
         super().__init__(config)
         self.__language_info: dict[Hashable, str] = language_info
         self.__game: GameStateManager | None = None
+        self.__tts: TTSable | None = None
         self.__has_deferred_config_change_been_logged: bool = False
         self.__request_lock: Lock = Lock()
 
@@ -55,7 +56,13 @@ class mantella_route(routeable):
         else:
             game = Skyrim(self._config)
 
+        if self.__tts:
+            try:
+                self.__tts.shutdown() # eg stop the Piper process of the previous settings
+            except Exception as e:
+                logger.debug(f'Could not shut down the previous TTS service: {e}')
         tts: TTSable = create_tts(self._config.tts_service, self._config, game)
+        self.__tts = tts
 
         ClientBase.request_timeout = float(self._config.llm_timeout)
         MantellaSetup.apply_console_log_setting(self._config)
@@ -94,7 +101,18 @@ class mantella_route(routeable):
             return await run_in_threadpool(self._handle_request, received_json)
 
     def _handle_request(self, received_json: dict[str, Any] | None) -> dict[str, Any]:
-        with self.__request_lock: # the game's requests are still processed strictly one after the other
+        # The game's requests are processed strictly one after the other. A request that is waiting for the player to speak
+        # can hold things up indefinitely (with push-to-talk: until the key is pressed), so requests that end or (re)start
+        # a conversation call that wait off instead of queueing behind it
+        cancels_listening = False
+        if received_json and self.__game and self.__request_lock.locked():
+            request_type = received_json.get(comm_consts.KEY_REQUESTTYPE)
+            if request_type in (comm_consts.KEY_REQUESTTYPE_ENDCONVERSATION, comm_consts.KEY_REQUESTTYPE_STARTCONVERSATION, comm_consts.KEY_REQUESTTYPE_INIT):
+                cancels_listening = True
+                self.__game.cancel_listening()
+        with self.__request_lock:
+            if cancels_listening and self.__game:
+                self.__game.clear_listening_cancel()
             if not self._can_route_be_used(self.__should_defer_config_changes(received_json)):
                 error_message = "MantellaSoftware settings faulty. Please check MantellaSoftware's window or log."
                 logger.error(error_message)

@@ -11,6 +11,8 @@ int property oid_showReminderMessages auto
 int property oid_keymapStartAddHotkey auto
 int property oid_keymapPromptHotkey auto
 int property oid_keymapEndHotkey auto
+int property oid_keymapToggleHotkey auto
+int property oid_keymapEndConversationHotkey auto
 int property oid_keymapCustomGameEventHotkey auto
 int property oid_keymapRadiantHotkey auto
 
@@ -111,7 +113,7 @@ string MantellaMCMcurrentPage
 ; Whenever a new repository value OR a new MCM setting is added, up the MCM version number returned by `ManatellaMCM.GetVersion()`
 ; and add the corresponding default value in 'MCMRepository.assignDefaultSettings' in a block corresponding to the version number like the examples
 int Function GetVersion()
-    Return 7
+    Return 8
 EndFunction
 
 event OnVersionUpdate(int a_version)
@@ -233,6 +235,10 @@ Event OnOptionHighlight (Int optionID)
 		SetInfoText("Opens the text prompt or starts the mic recording depending on the context and the microphone options above. \nDefault: H")
 	elseIf optionID == oid_keymapEndHotkey
 		SetInfoText("Ends all Mantella conversations.")
+	elseIf optionID == oid_keymapToggleHotkey
+		SetInfoText("One key to add and remove NPCs. Looking at an NPC who is not in the conversation: starts a conversation with them, or adds them to the running one. Looking at an NPC who is in the conversation: removes them from it. Does nothing when not looking at an NPC.")
+	elseIf optionID == oid_keymapEndConversationHotkey
+		SetInfoText("Ends the whole conversation, no matter who or what you are looking at.")
 	elseIf optionID == oid_keymapCustomGameEventHotkey	
 		SetInfoText("Opens a text prompt to enter a custom game event (eg 'The house is on fire').")
 	elseIf optionID == oid_keymapRadiantHotkey	
