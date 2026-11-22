@@ -119,9 +119,12 @@ jobs:
         shell: bash
         run: |
           ls dist/Mantella-Skyrim-*.zip
-          unzip -l dist/Mantella-Skyrim-*.zip | grep -q "SKSE/Plugins/MantellaSoftware/Mantella.exe"
-          unzip -l dist/Mantella-Skyrim-*.zip | grep -q " Mantella.esp"
-          unzip -l dist/Mantella-Skyrim-*.zip | grep -q "SKSE/Plugins/MantellaSoftware/piper/piper.exe"
+          # The listing is written to a file first: piping it into "grep -q" fails the step, as grep stops reading at the first match
+          unzip -l dist/Mantella-Skyrim-*.zip > archive-contents.txt
+          grep -q "SKSE/Plugins/MantellaSoftware/Mantella.exe" archive-contents.txt
+          grep -q " Mantella.esp" archive-contents.txt
+          grep -q "SKSE/Plugins/MantellaSoftware/piper/piper.exe" archive-contents.txt
+          grep "SKSE/Plugins/.*\.dll" archive-contents.txt || echo "Note: the archive does not contain the SKSE plugins"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7

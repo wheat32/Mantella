@@ -183,3 +183,64 @@ def test_waiting_for_speech_can_be_cancelled():
     transcriber.clear_cancel_waiting()
     assert not transcriber._cancel_waiting.is_set()
     assert not transcriber._transcription_ready.is_set()
+
+
+def _make_idle_transcriber(key_pressed: bool):
+    import threading
+    from src.stt.stt import Transcriber
+
+    class FakeKey:
+        def __init__(self, pressed): self.pressed = pressed
+        def is_pressed(self): return self.pressed
+
+    transcriber = Transcriber.__new__(Transcriber)
+    transcriber._idle_lock = threading.Lock()
+    transcriber._lock = threading.Lock()
+    transcriber._preroll = np.array([], dtype=np.float32)
+    transcriber._preroll_time = 0
+    transcriber._use_preroll = False
+    transcriber._ptt = FakeKey(key_pressed)
+    transcriber._audio_buffer = np.array([], dtype=np.float32)
+    transcriber._ptt_active = False
+    transcriber._speech_detected = False
+    transcriber._last_update_time = 0
+    transcriber.listen_timeout = 30
+    transcriber.loglevel = 27
+    transcriber.finalized = []
+    transcriber._finalize_transcription = lambda **kwargs: transcriber.finalized.append(len(transcriber._audio_buffer))
+    return transcriber
+
+
+def test_speech_before_conversation_start_is_continued_while_key_is_held():
+    transcriber = _make_idle_transcriber(key_pressed=True)
+    one_second = np.ones(transcriber.SAMPLING_RATE, dtype=np.float32)
+    transcriber._add_to_preroll(one_second, is_new_press=True)
+    transcriber._add_to_preroll(one_second, is_new_press=False)
+
+    transcriber.use_idle_capture_for_next_listen(True)
+    transcriber._apply_preroll()
+    assert len(transcriber._audio_buffer) == 2 * transcriber.SAMPLING_RATE
+    assert transcriber._ptt_active and transcriber._speech_detected
+    assert transcriber.finalized == [] # transcribed once the key is released
+    assert len(transcriber._preroll) == 0
+
+
+def test_speech_before_conversation_start_is_transcribed_if_key_was_released():
+    transcriber = _make_idle_transcriber(key_pressed=False)
+    transcriber._add_to_preroll(np.ones(transcriber.SAMPLING_RATE, dtype=np.float32), is_new_press=True)
+    transcriber.use_idle_capture_for_next_listen(True)
+    transcriber._apply_preroll()
+    assert transcriber.finalized == [transcriber.SAMPLING_RATE]
+
+
+def test_speech_before_conversation_start_is_ignored_unless_meant_for_it():
+    transcriber = _make_idle_transcriber(key_pressed=False)
+    transcriber._add_to_preroll(np.ones(transcriber.SAMPLING_RATE, dtype=np.float32), is_new_press=True)
+    transcriber.use_idle_capture_for_next_listen(False) # conversation started another way
+    transcriber._apply_preroll()
+    assert transcriber.finalized == [] and len(transcriber._audio_buffer) == 0
+
+    # a new key press replaces what was recorded on the previous one
+    transcriber._add_to_preroll(np.ones(100, dtype=np.float32), is_new_press=True)
+    transcriber._add_to_preroll(np.ones(50, dtype=np.float32), is_new_press=True)
+    assert len(transcriber._preroll) == 50

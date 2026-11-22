@@ -417,6 +417,32 @@ bool StopVoiceLine(RE::StaticFunctionTag*, RE::Actor* actor, int fadeMs) {
     return stoppedAny;
 }
 
+// Returns the actors loaded around @center within @radius (in game units), nearest first, at most @maxCount.
+// Unlike a quest with a fixed number of aliases, this is not limited to a handful of actors.
+std::vector<RE::Actor*> GetNearbyActors(RE::StaticFunctionTag*, RE::Actor* center, float radius, int maxCount) {
+    std::vector<RE::Actor*> result;
+    try {
+        if (!center || maxCount <= 0) return result;
+        RE::ProcessLists* processLists = RE::ProcessLists::GetSingleton();
+        if (!processLists) return result;
+
+        const RE::NiPoint3 origin = center->GetPosition();
+        std::vector<std::pair<float, RE::Actor*>> found;
+        for (RE::ActorHandle& handle : processLists->highActorHandles) {
+            RE::NiPointer<RE::Actor> actorPointer = handle.get();
+            RE::Actor* actor = actorPointer.get();
+            if (!actor || actor == center || actor->IsDisabled() || !actor->Is3DLoaded()) continue;
+            const float distance = origin.GetDistance(actor->GetPosition());
+            if (distance <= radius) found.emplace_back(distance, actor);
+        }
+        std::sort(found.begin(), found.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+        if (found.size() > static_cast<std::size_t>(maxCount)) found.resize(static_cast<std::size_t>(maxCount));
+        for (const auto& entry : found) result.push_back(entry.second);
+    } catch (...) {
+    }
+    return result;
+}
+
 //  Returns true, if the container has @key: value pair
 bool hasKeyRelay(RE::StaticFunctionTag*, int object, std::string key) { return hasKey(object, key); };
 
@@ -456,6 +482,7 @@ bool Bind(RE::BSScript::IVirtualMachine* vm) {
     vm->RegisterFunction("GetRaceDefaultVoiceType", className, GetRaceDefaultVoiceType);
     vm->RegisterFunction("SetRaceDefaultVoiceType", className, SetRaceDefaultVoiceType);
     vm->RegisterFunction("StopVoiceLine", className, StopVoiceLine);
+    vm->RegisterFunction("GetNearbyActors", className, GetNearbyActors);
 
     vm->RegisterFunction("hasKey", className, hasKeyRelay);
     return true;

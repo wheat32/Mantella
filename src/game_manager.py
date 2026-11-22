@@ -52,7 +52,21 @@ class GameStateManager:
         self.__should_reload: bool = False
         self.__chat_manager.clear_per_character_client_cache()
         self.__random_selector = RandomLLMSelector()
+        if config.ptt_enabled:
+            # With push-to-talk, start recording key presses right away rather than from the first conversation on,
+            # so that a conversation can be started by talking to an NPC (free-flow)
+            try:
+                self.__stt = Transcriber(config)
+                self.__stt.start_idle_capture()
+            except Exception as e:
+                logger.warning(f'Could not set up push-to-talk before the first conversation: {e}')
+                self.__stt = None
 
+
+    def shutdown(self) -> None:
+        """Releases what this manager holds on to. Called when it is replaced, eg after a settings change"""
+        if self.__stt:
+            self.__stt.stop_idle_capture()
 
     def cancel_listening(self) -> None:
         """Calls off a request that is waiting for the player to speak, so that the next request can be handled"""
@@ -88,8 +102,15 @@ class GameStateManager:
         runtime_state.set_conversation_active(True)
         self.__talk = Conversation(context_for_conversation, self.__chat_manager, self.__rememberer, conversation_client, self.__stt, self.__mic_input, self.__mic_ptt, self.__game)
         self.__update_context(input_json)
-        self.__try_preload_voice_model()
-        self.__talk.start_conversation()
+        # Free-flow: the player started the conversation by talking to the NPC, so they have the first word
+        player_speaks_first = bool(input_json.get(comm_consts.KEY_STARTCONVERSATION_PLAYERSPEAKSFIRST, False)) and self.__mic_input
+        if self.__stt:
+            self.__stt.use_idle_capture_for_next_listen(player_speaks_first)
+        if player_speaks_first:
+            logger.log(23, 'Conversation started by the player speaking (free-flow)')
+        else:
+            self.__try_preload_voice_model()
+        self.__talk.start_conversation(player_speaks_first)
             
         return {
             comm_consts.KEY_REPLYTYPE: comm_consts.KEY_REPLYTTYPE_STARTCONVERSATIONCOMPLETED,
@@ -264,6 +285,8 @@ class GameStateManager:
             self.__talk.end(end_timestamp)
             self.__talk = None
             runtime_state.set_conversation_active(False)
+            if self.__stt:
+                self.__stt.start_idle_capture()
 
         logger.log(24, '\nConversations not starting when you select an NPC? See here:')
         logger.log(25, 'https://art-from-the-machine.github.io/Mantella/pages/issues_qna')
@@ -282,6 +305,7 @@ class GameStateManager:
         else:
             self.__mic_input = False
             if self.__stt:
+                self.__stt.stop_idle_capture()
                 self.__stt.stop_listening()
                 self.__stt = None
 
@@ -352,6 +376,9 @@ class GameStateManager:
 
                 if json[comm_consts.KEY_CONTEXT].__contains__(comm_consts.KEY_CONTEXT_NPCS_NEARBY):
                     npcs_nearby = json[comm_consts.KEY_CONTEXT][comm_consts.KEY_CONTEXT_NPCS_NEARBY]
+                elif self.__talk and self.__talk.context.npcs_in_conversation.get_nearby_npc_names():
+                    # The game leaves the list out when nobody else is in sight (anymore)
+                    npcs_nearby = []
 
                 if json[comm_consts.KEY_CONTEXT].__contains__(comm_consts.KEY_CONTEXT_CONFIG_SETTINGS):
                     config_settings = json[comm_consts.KEY_CONTEXT][comm_consts.KEY_CONTEXT_CONFIG_SETTINGS]

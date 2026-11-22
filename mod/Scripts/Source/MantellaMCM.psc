@@ -13,6 +13,12 @@ int property oid_keymapPromptHotkey auto
 int property oid_keymapEndHotkey auto
 int property oid_keymapToggleHotkey auto
 int property oid_keymapEndConversationHotkey auto
+int property oid_keymapFreeFlowHotkey auto
+int property oid_freeFlowUseNearest auto
+int property oid_freeFlowDistance auto
+int property oid_freeFlowIncludeCreatures auto
+int property oid_awarenessMaxCharacters auto
+int property oid_awarenessDistance auto
 int property oid_keymapCustomGameEventHotkey auto
 int property oid_keymapRadiantHotkey auto
 
@@ -237,6 +243,18 @@ Event OnOptionHighlight (Int optionID)
 		SetInfoText("Ends all Mantella conversations.")
 	elseIf optionID == oid_keymapToggleHotkey
 		SetInfoText("One key to add and remove NPCs. Looking at an NPC who is not in the conversation: starts a conversation with them, or adds them to the running one. Looking at an NPC who is in the conversation: removes them from it. Does nothing when not looking at an NPC.")
+	elseIf optionID == oid_keymapFreeFlowHotkey
+		SetInfoText("Free-flow conversations: set this to the same key as push-to-talk in the Mantella UI. Walk up to an NPC (or look at them) and start talking while holding the key: if they are not in a conversation with you yet, they are brought into it, and what you say is passed on to them. Leave unbound to disable.")
+	elseIf optionID == oid_freeFlowUseNearest
+		SetInfoText("When you press the Free-flow Talk Key without looking directly at anyone, talk to the nearest character on screen instead. If disabled, free-flow only works on the character under your crosshair. \nDefault: On")
+	elseIf optionID == oid_freeFlowDistance
+		SetInfoText("How close (in meters) the nearest character has to be for free-flow to pick them when you are not looking directly at anyone. \nDefault: 5")
+	elseIf optionID == oid_freeFlowIncludeCreatures
+		SetInfoText("Whether the nearest character picked by free-flow may be a creature or animal. Characters under your crosshair can always be talked to. \nDefault: Off")
+	elseIf optionID == oid_awarenessMaxCharacters
+		SetInfoText("How many characters around you (outside of the conversation) NPCs are told about at most. Only characters that can be seen, or heard (a dragon, or fighting close by), are counted, nearest first. \nDefault: 10")
+	elseIf optionID == oid_awarenessDistance
+		SetInfoText("How far away (in meters) characters can be for NPCs to be told about them, if they can be seen or heard. \nDefault: 150")
 	elseIf optionID == oid_keymapEndConversationHotkey
 		SetInfoText("Ends the whole conversation, no matter who or what you are looking at.")
 	elseIf optionID == oid_keymapCustomGameEventHotkey	

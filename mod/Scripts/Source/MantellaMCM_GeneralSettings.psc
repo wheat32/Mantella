@@ -20,6 +20,7 @@ function LeftColumn(MantellaMCM mcm, MantellaRepository Repository) global
     mcm.oid_keymapEndHotkey = mcm.AddKeyMapOption("End Conversation / Remove NPC", repository.MantellaEndHotkey)
     mcm.oid_keymapToggleHotkey = mcm.AddKeyMapOption("Toggle NPC in Conversation", repository.MantellaToggleHotkey)
     mcm.oid_keymapEndConversationHotkey = mcm.AddKeyMapOption("End Conversation", repository.MantellaEndConversationHotkey)
+    mcm.oid_keymapFreeFlowHotkey = mcm.AddKeyMapOption("Free-flow Talk Key", repository.MantellaFreeFlowHotkey)
     mcm.oid_keymapCustomGameEventHotkey = mcm.AddKeyMapOption("Add Custom Game Event", repository.MantellaCustomGameEventHotkey)
     mcm.oid_keymapRadiantHotkey = mcm.AddKeyMapOption("Toggle Radiant Dialogue", repository.MantellaRadiantHotkey) 
 endfunction
@@ -32,6 +33,15 @@ function RightColumn(MantellaMCM mcm, MantellaRepository Repository) global
     mcm.oid_radiantdistance = mcm.AddSliderOption("Trigger Distance",repository.radiantDistance)
     mcm.oid_radiantfrequency = mcm.AddSliderOption("Trigger Frequency",repository.radiantFrequency)
     mcm.oid_showRadiantDialogueMessages = mcm.AddToggleOption("Show Debug Messages", repository.showRadiantDialogueMessages)
+
+    mcm.AddHeaderOption("Free-flow Conversations")
+    mcm.oid_freeFlowUseNearest = mcm.AddToggleOption("Talk to Nearest Character", repository.freeFlowUseNearest)
+    mcm.oid_freeFlowDistance = mcm.AddSliderOption("Nearest Character Distance", repository.freeFlowDistance)
+    mcm.oid_freeFlowIncludeCreatures = mcm.AddToggleOption("Nearest Can Be a Creature", repository.freeFlowIncludeCreatures)
+
+    mcm.AddHeaderOption("Awareness of Surroundings")
+    mcm.oid_awarenessMaxCharacters = mcm.AddSliderOption("Max Characters Noticed", repository.awarenessMaxCharacters)
+    mcm.oid_awarenessDistance = mcm.AddSliderOption("Notice Distance", repository.awarenessDistance)
 
     mcm.AddHeaderOption("NPC Actions")
     mcm.oid_NPCPackageToggle = mcm.AddToggleOption("NPCs Stop to Talk", Repository.NPCPackage)
@@ -50,6 +60,21 @@ function SliderOptionOpen(MantellaMCM mcm, int optionID, MantellaRepository Repo
         mcm.SetSliderDialogStartValue(repository.radiantDistance)
         mcm.SetSliderDialogDefaultValue(20)
         mcm.SetSliderDialogRange(1, 250)
+        mcm.SetSliderDialogInterval(1)
+    elseIf optionID==mcm.oid_awarenessMaxCharacters
+        mcm.SetSliderDialogStartValue(repository.awarenessMaxCharacters)
+        mcm.SetSliderDialogDefaultValue(10)
+        mcm.SetSliderDialogRange(1, 30)
+        mcm.SetSliderDialogInterval(1)
+    elseIf optionID==mcm.oid_awarenessDistance
+        mcm.SetSliderDialogStartValue(repository.awarenessDistance)
+        mcm.SetSliderDialogDefaultValue(150)
+        mcm.SetSliderDialogRange(10, 300)
+        mcm.SetSliderDialogInterval(10)
+    elseIf optionID==mcm.oid_freeFlowDistance
+        mcm.SetSliderDialogStartValue(repository.freeFlowDistance)
+        mcm.SetSliderDialogDefaultValue(5)
+        mcm.SetSliderDialogRange(1, 30)
         mcm.SetSliderDialogInterval(1)
     elseIf optionID==mcm.oid_radiantfrequency
         mcm.SetSliderDialogStartValue(repository.radiantFrequency)
@@ -73,6 +98,15 @@ function SliderOptionAccept(MantellaMCM mcm, int optionID, float value, Mantella
         mcm.SetSliderOptionValue(optionId, value)
         Repository.radiantDistance=value
         debug.MessageBox("Please save and reload for this change to take effect")
+    elseIf optionId == mcm.oid_awarenessMaxCharacters
+        mcm.SetSliderOptionValue(optionId, value)
+        Repository.awarenessMaxCharacters=value as int
+    elseIf optionId == mcm.oid_awarenessDistance
+        mcm.SetSliderOptionValue(optionId, value)
+        Repository.awarenessDistance=value
+    elseIf optionId == mcm.oid_freeFlowDistance
+        mcm.SetSliderOptionValue(optionId, value)
+        Repository.freeFlowDistance=value
     elseIf optionId == mcm.oid_radiantfrequency
         mcm.SetSliderOptionValue(optionId, value)
         Repository.radiantFrequency=value
@@ -87,7 +121,7 @@ endfunction
 
 function KeyMapChange(MantellaMCM mcm,Int option, Int keyCode, String conflictControl, String conflictName, MantellaRepository Repository) global
     ;This script is used to check if a key is already used, if it's not it will update to a new value (stored in MantellaRepository) or it will prompt the user to warn him of the conflict. The actual keybind happens in MantellaRepository
-    bool isOptionHotkey = option == mcm.oid_keymapStartAddHotkey || option == mcm.oid_keymapPromptHotkey || option == mcm.oid_keymapCustomGameEventHotkey || option == mcm.oid_keymapEndHotkey || option == mcm.oid_keymapToggleHotkey || option == mcm.oid_keymapEndConversationHotkey || option == mcm.oid_keymapRadiantHotkey
+    bool isOptionHotkey = option == mcm.oid_keymapStartAddHotkey || option == mcm.oid_keymapPromptHotkey || option == mcm.oid_keymapCustomGameEventHotkey || option == mcm.oid_keymapEndHotkey || option == mcm.oid_keymapToggleHotkey || option == mcm.oid_keymapEndConversationHotkey || option == mcm.oid_keymapFreeFlowHotkey || option == mcm.oid_keymapRadiantHotkey
     if (isOptionHotkey)
         Bool continue = true
         ;below checks if there's already a bound key
@@ -113,6 +147,8 @@ function KeyMapChange(MantellaMCM mcm,Int option, Int keyCode, String conflictCo
                 repository.BindToggleHotkey(keyCode)
             elseIf option == mcm.oid_keymapEndConversationHotkey
                 repository.BindEndConversationHotkey(keyCode)
+            elseIf option == mcm.oid_keymapFreeFlowHotkey
+                repository.BindFreeFlowHotkey(keyCode)
             elseIf option == mcm.oid_keymapCustomGameEventHotkey
                 repository.BindCustomGameEventHotkey(keyCode)
             elseIf option == mcm.oid_keymapRadiantHotkey
@@ -142,6 +178,12 @@ function OptionUpdate(MantellaMCM mcm, int optionID, MantellaRepository Reposito
     elseIf optionID == mcm.oid_radiantenabled
         repository.radiantEnabled =! repository.radiantEnabled
         mcm.SetToggleOptionValue(mcm.oid_radiantenabled, repository.radiantEnabled)
+    elseIf optionID == mcm.oid_freeFlowUseNearest
+        repository.freeFlowUseNearest =! repository.freeFlowUseNearest
+        mcm.SetToggleOptionValue(optionID, repository.freeFlowUseNearest)
+    elseIf optionID == mcm.oid_freeFlowIncludeCreatures
+        repository.freeFlowIncludeCreatures =! repository.freeFlowIncludeCreatures
+        mcm.SetToggleOptionValue(optionID, repository.freeFlowIncludeCreatures)
     elseIf optionID == mcm.oid_approachenabled
         repository.approachEnabled =! repository.approachEnabled
         mcm.SetToggleOptionValue(mcm.oid_approachenabled, repository.approachEnabled)

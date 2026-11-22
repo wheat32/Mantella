@@ -30,6 +30,12 @@ int property MantellaListenerTextHotkey auto
 int property MantellaEndHotkey auto
 int property MantellaToggleHotkey auto
 int property MantellaEndConversationHotkey auto
+int property MantellaFreeFlowHotkey auto
+bool property freeFlowUseNearest auto
+float property freeFlowDistance auto
+bool property freeFlowIncludeCreatures auto
+int property awarenessMaxCharacters auto
+float property awarenessDistance auto
 int property MantellaCustomGameEventHotkey auto
 int property MantellaRadiantHotkey auto
 
@@ -129,6 +135,12 @@ function assignDefaultSettings(int lastVersion, bool isFirstInit = false)
     If (lastVersion < 8 || isFirstInit)
         MantellaToggleHotkey = -1
         MantellaEndConversationHotkey = -1
+        MantellaFreeFlowHotkey = -1
+        freeFlowUseNearest = true
+        freeFlowDistance = 5
+        freeFlowIncludeCreatures = false
+        awarenessMaxCharacters = 10
+        awarenessDistance = 150
     EndIf
     If (lastVersion < 7 || isFirstInit)
         enableVanillaDialogueAwareness = true
@@ -263,6 +275,36 @@ function BindEndConversationHotkey(int keyCode)
     RegisterForKey(keyCode)
 endfunction
 
+function BindFreeFlowHotkey(int keyCode)
+    ;used by the MCM_GeneralSettings when updating the free-flow talk hotkey KeyMapChange
+    UnregisterForKey(MantellaFreeFlowHotkey)
+    MantellaFreeFlowHotkey=keyCode
+    RegisterForKey(keyCode)
+endfunction
+
+; The NPC the player is talking to when the free-flow talk key is pressed: the one under the crosshair, or else
+; (if enabled in the MCM) the closest one within the configured distance who is on screen
+Actor Function GetFreeFlowTarget()
+    Actor target = (Game.GetCurrentCrosshairRef() as Actor)
+    if !target
+        if !freeFlowUseNearest
+            return None
+        endIf
+        target = Game.FindClosestActorFromRef(PlayerRef, freeFlowDistance * 71.0210) ; meters to game units
+        if !target || target == PlayerRef || !PlayerRef.HasLOS(target)
+            return None
+        endIf
+        Keyword npcKeyword = Keyword.GetKeyword("ActorTypeNPC")
+        if !freeFlowIncludeCreatures && npcKeyword && !target.HasKeyword(npcKeyword)
+            return None
+        endIf
+    endIf
+    if target == PlayerRef || target.IsDead() || target.IsHostileToActor(PlayerRef)
+        return None
+    endIf
+    return target
+EndFunction
+
 function BindCustomGameEventHotkey(int keyCode)
     ;used by the MCM_GeneralSettings when updating the custom game event hotkey KeyMapChange
     UnregisterForKey(MantellaCustomGameEventHotkey)
@@ -330,6 +372,18 @@ Event OnKeyDown(int KeyCode)
                 if (conversation.IsRunning() && conversation.IsActorInConversation(targetRef))
                     MantellaRemoveNpcSpell.cast(PlayerRef, targetRef)
                 else
+                    MantellaSpell.cast(PlayerRef, targetRef)
+                endIf
+            endIf
+        elseIf KeyCode == MantellaFreeFlowHotkey
+            ; Free-flow: meant to share its key with push-to-talk. Talking at an NPC who is not in the conversation brings them into it
+            Actor targetRef = GetFreeFlowTarget()
+            if (targetRef)
+                MantellaConversation conversation = Quest.GetQuest("MantellaConversation") as MantellaConversation
+                if (!conversation.IsRunning())
+                    conversation.SetPlayerSpeaksFirst(true)
+                    MantellaSpell.cast(PlayerRef, targetRef)
+                elseIf (!conversation.IsActorInConversation(targetRef))
                     MantellaSpell.cast(PlayerRef, targetRef)
                 endIf
             endIf

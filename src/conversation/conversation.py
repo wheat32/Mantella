@@ -112,13 +112,16 @@ class Conversation:
             self.__save_conversation(is_reload=True, departed_npcs=characters_removed_by_update)
 
     @utils.time_it
-    def start_conversation(self) -> tuple[str, Sentence | None]:
+    def start_conversation(self, player_speaks_first: bool = False) -> tuple[str, Sentence | None]:
         """Starts a new conversation.
+
+        Args:
+            player_speaks_first (bool): If True, the NPC does not open with a greeting, as the player is already talking to them (free-flow conversations)
 
         Returns:
             tuple[str, sentence | None]: Returns a tuple consisting of a reply type and an optional sentence
         """
-        greeting: UserMessage | None = self.__conversation_type.get_user_message(self.__context, self.__messages)
+        greeting: UserMessage | None = None if player_speaks_first else self.__conversation_type.get_user_message(self.__context, self.__messages)
         if greeting:
             greeting = self.update_game_events(greeting)
             self.__messages.add_message(greeting)

@@ -42,6 +42,7 @@ float httpReceivedTime = 0.0
 string lineToSpeakError = "Error: No line transmitted for actor to speak"
 bool microphoneEnabledLastKnownStatus = false
 Actor[] _cachedNearbyActors = None
+bool _playerSpeaksFirst = false
 bool _waitingForActionResponse = true
 int _actionResponseTimeout = 0
 bool _playerInputPending = false
@@ -75,6 +76,11 @@ endEvent
 ;    Start new conversation   ;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+; Marks the next conversation as started by the player speaking to an NPC (free-flow talk key)
+Function SetPlayerSpeaksFirst(bool playerSpeaksFirst)
+    _playerSpeaksFirst = playerSpeaksFirst
+EndFunction
+
 function StartConversation(Actor[] actorsToStartConversationWith)
     int handle = SKSE_HTTP.createDictionary()
     SKSE_HTTP.setString(handle, mConsts.KEY_REQUESTTYPE, mConsts.KEY_REQUESTTYPE_INIT)
@@ -91,6 +97,11 @@ function StartConversation(Actor[] actorsToStartConversationWith)
     
     SKSE_HTTP.setString(handle, mConsts.KEY_REQUESTTYPE, mConsts.KEY_REQUESTTYPE_STARTCONVERSATION)
     SKSE_HTTP.setString(handle, mConsts.KEY_STARTCONVERSATION_WORLDID, PlayerRef.GetDisplayName() + repository.worldID)
+    if _playerSpeaksFirst
+        ; Free-flow: the player is already talking, so the NPC does not open with a greeting
+        SKSE_HTTP.setBool(handle, "mantella_player_speaks_first", true)
+        _playerSpeaksFirst = false
+    endIf
     BuildContext(true)
     AddCurrentActorsAndContext(handle, true)
 
@@ -1069,9 +1080,46 @@ int function BuildContext(bool isConversationStart = false)
     endIf
 endFunction
 
+; Whether the player (on screen and unobstructed) or one of the NPCs in the conversation has a line of sight to the actor
+bool Function IsActorInSight(Actor target)
+    if PlayerRef.HasLOS(target)
+        return true
+    endIf
+    int i = 0
+    While i < Participants.GetSize()
+        Actor participant = Participants.GetAt(i) as Actor
+        if participant && participant != PlayerRef && participant.HasLOS(target)
+            return true
+        endIf
+        i += 1
+    EndWhile
+    return false
+EndFunction
+
+; Whether an actor who cannot be seen is making enough noise to be noticed: a dragon, or someone fighting close by
+bool Function IsActorAudible(Actor target, float distanceInMeters)
+    if target.IsDead()
+        return false
+    endIf
+    Keyword dragonKeyword = Keyword.GetKeyword("ActorTypeDragon")
+    if dragonKeyword && target.HasKeyword(dragonKeyword)
+        return distanceInMeters <= 150.0
+    endIf
+    return target.IsInCombat() && distanceInMeters <= 40.0
+EndFunction
+
 int[] function BuildNearbyActorsContext()
-    ; Scan for nearby actors (excludes Mantella conversation participants)
-    Actor[] nearbyActors = Listener.ScanNearbyActors()
+    ; Scan for nearby actors. SKSE_HTTP.GetNearbyActors is not limited to a fixed number of actors.
+    ; With an SKSE_HTTP.dll that does not have it yet, the older scan (at most 5 actors) is used instead
+    float toMeters = 1.0 / 71.0210
+    int maxReported = repository.awarenessMaxCharacters
+    if maxReported < 1
+        maxReported = 1
+    endIf
+    Actor[] nearbyActors = SKSE_HTTP.GetNearbyActors(PlayerRef, repository.awarenessDistance / toMeters, 40)
+    if !nearbyActors || nearbyActors.Length == 0
+        nearbyActors = Listener.ScanNearbyActors()
+    endIf
     _cachedNearbyActors = nearbyActors
 
     if !nearbyActors || nearbyActors.Length == 0
@@ -1081,17 +1129,24 @@ int[] function BuildNearbyActorsContext()
     int totalEntries = nearbyActors.Length
     int[] nearbyActorHandles = Utility.CreateIntArray(totalEntries)
     int handleIndex = 0
-    float toMeters = 1.0 / 71.0210
     int i = 0
-    While i < totalEntries
+    ; The actors are ordered nearest first, so the nearest ones that can be seen or heard are the ones reported
+    While i < totalEntries && handleIndex < maxReported
         Actor nearbyActor = nearbyActors[i]
-        if nearbyActor != None
-            int actorHandle = SKSE_HTTP.createDictionary()
-            SKSE_HTTP.setString(actorHandle, "name", nearbyActor.GetDisplayName())
+        if nearbyActor != None && nearbyActor != PlayerRef && !Participants.HasForm(nearbyActor)
+            ; Only characters that can actually be seen are reported. Otherwise NPCs talk about (eg) bandits
+            ; who are behind a hill or around a bend, where neither they nor the player could know about them
+            bool isInSight = IsActorInSight(nearbyActor)
             float distanceInMeters = PlayerRef.GetDistance(nearbyActor) * toMeters
-            SKSE_HTTP.setFloat(actorHandle, "distance", distanceInMeters)
-            nearbyActorHandles[handleIndex] = actorHandle
-            handleIndex += 1
+            ; Characters that are out of sight are still reported if they can plausibly be heard
+            if isInSight || IsActorAudible(nearbyActor, distanceInMeters)
+                int actorHandle = SKSE_HTTP.createDictionary()
+                SKSE_HTTP.setString(actorHandle, "name", nearbyActor.GetDisplayName())
+                SKSE_HTTP.setFloat(actorHandle, "distance", distanceInMeters)
+                SKSE_HTTP.setBool(actorHandle, "heard_only", !isInSight)
+                nearbyActorHandles[handleIndex] = actorHandle
+                handleIndex += 1
+            endIf
         endIf
         i += 1
     EndWhile

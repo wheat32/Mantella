@@ -48,6 +48,7 @@ class mantella_route(routeable):
     def _setup_route(self):
         if self.__game:
             self.__game.end_conversation({})
+            self.__game.shutdown()
 
         game: Gameable
         game_enum = self._config.game

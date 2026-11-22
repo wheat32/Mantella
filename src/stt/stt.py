@@ -329,6 +329,14 @@ class Transcriber:
         self._current_transcription = ""
         self._transcription_ready = threading.Event()
         self._cancel_waiting = threading.Event()
+
+        # Push-to-talk capture while no conversation is running (see start_idle_capture)
+        self._idle_thread: Optional[threading.Thread] = None
+        self._idle_stop = threading.Event()
+        self._idle_lock = threading.Lock()
+        self._preroll = np.array([], dtype=np.float32)
+        self._preroll_time: float = 0
+        self._use_preroll: bool = False
         self._consecutive_empty_count = 0
         self._max_consecutive_empty = 10
 
@@ -528,10 +536,13 @@ If you would prefer to run speech-to-text locally, please ensure the `Speech-to-
         if self._running:
             return
             
+        self.stop_idle_capture() # the microphone is taken over by the conversation
         self._running = True
         self._reset_state()
         self.prompt = prompt
         self._names_to_correct = names or []
+        if self.ptt_enabled:
+            self._apply_preroll()
         
         # Start audio stream
         try:
@@ -800,6 +811,97 @@ If you would prefer to run speech-to-text locally, please ensure the `Speech-to-
 
             time.sleep(0.1)
 
+
+    # ---- Push-to-talk capture between conversations
+    # With free-flow conversations, the player starts a conversation by simply talking to an NPC while holding the
+    # push-to-talk key. The conversation only exists a moment later, so what is said in the meantime is recorded here
+    # and handed to the conversation when it starts listening.
+
+    def start_idle_capture(self) -> None:
+        """Starts recording push-to-talk input while no conversation is listening for it"""
+        if not self.ptt_enabled or self._running or (self._idle_thread and self._idle_thread.is_alive()):
+            return
+        self._idle_stop.clear()
+        self._idle_thread = threading.Thread(target=self._idle_capture_loop, daemon=True)
+        self._idle_thread.start()
+
+    def stop_idle_capture(self) -> None:
+        self._idle_stop.set()
+        if self._idle_thread and self._idle_thread.is_alive() and self._idle_thread is not threading.current_thread():
+            self._idle_thread.join(timeout=2)
+        self._idle_thread = None
+
+    def use_idle_capture_for_next_listen(self, use: bool) -> None:
+        """Whether what was said into the push-to-talk key before the conversation started is the player's first input.
+        Otherwise it is discarded: a key press some time before a conversation that was started another way is not meant for it"""
+        self._use_preroll = use
+        if not use:
+            with self._idle_lock:
+                self._preroll = np.array([], dtype=np.float32)
+
+    def _idle_capture_loop(self) -> None:
+        stream = None
+        try:
+            from sounddevice import InputStream
+            audio_queue: queue.Queue = queue.Queue()
+            stream = InputStream(samplerate=self.SAMPLING_RATE, channels=1, blocksize=self.CHUNK_SIZE, dtype=np.float32,
+                                 callback=self._create_input_callback(audio_queue), latency='low')
+            stream.start()
+            was_pressed = False
+            while not self._idle_stop.is_set():
+                try:
+                    chunk, _ = audio_queue.get(timeout=0.1)
+                except queue.Empty:
+                    continue
+                is_pressed = self._ptt.is_pressed()
+                if is_pressed:
+                    self._add_to_preroll(chunk, is_new_press=not was_pressed)
+                was_pressed = is_pressed
+        except Exception as e:
+            logger.debug(f'Push-to-talk capture between conversations is not available: {e}')
+        finally:
+            if stream:
+                try:
+                    stream.stop()
+                    stream.close()
+                except Exception:
+                    pass
+
+    def _add_to_preroll(self, chunk: np.ndarray, is_new_press: bool) -> None:
+        with self._idle_lock:
+            if is_new_press:
+                self._preroll = np.array([], dtype=np.float32)
+            if len(self._preroll) / self.SAMPLING_RATE < self.listen_timeout:
+                self._preroll = np.concatenate((self._preroll, chunk))
+            self._preroll_time = time.time()
+
+    def _take_preroll(self, max_age: float = 15.0) -> np.ndarray | None:
+        """Returns (and forgets) what was recorded before the conversation started, if it is meant for this conversation and recent"""
+        with self._idle_lock:
+            audio, recorded_at = self._preroll, self._preroll_time
+            self._preroll = np.array([], dtype=np.float32)
+        use, self._use_preroll = self._use_preroll, False
+        if not use or len(audio) == 0 or time.time() - recorded_at > max_age:
+            return None
+        return audio
+
+    def _apply_preroll(self) -> None:
+        """Continues (or completes) the push-to-talk input that began before the conversation was listening"""
+        audio = self._take_preroll()
+        if audio is None:
+            return
+        with self._lock:
+            self._audio_buffer = audio
+            if self._ptt.is_pressed():
+                # still talking: the rest is appended as it is recorded, and transcribed when the key is released
+                self._ptt_active = True
+                self._speech_detected = True
+                self._last_update_time = time.time()
+            elif len(audio) / self.SAMPLING_RATE >= self.MIN_PTT_DURATION:
+                logger.log(self.loglevel, 'Transcribing what was said while the conversation was starting')
+                self._finalize_transcription()
+            else:
+                self._audio_buffer = np.array([], dtype=np.float32)
 
     def cancel_waiting(self) -> None:
         """Wakes up a call to get_latest_transcription that is waiting for the player to speak, making it raise ListeningCancelled.

@@ -69,3 +69,6 @@ Function SetRaceDefaultVoiceType(Actor actor, VoiceType voice) global native
     Returns true if a playing voice sound was stopped.
 /;
 Bool Function StopVoiceLine(Actor actor, Int fadeMs = 150) global native
+
+; Returns the actors loaded around center within radius (in game units), nearest first, at most maxCount
+Actor[] Function GetNearbyActors(Actor center, Float radius, Int maxCount) global native
