@@ -26,13 +26,8 @@ FetchContent_Declare(commonlibsse_ng
 FetchContent_MakeAvailable(commonlibsse_ng)
 include(${commonlibsse_ng_SOURCE_DIR}/cmake/CommonLibSSE.cmake)
 
-# HTTP client used by SKSE_HTTP
-set(BUILD_STATIC_CURL ON)
-set(BUILD_STATIC_LIBS ON)
-FetchContent_Declare(cpr
-    GIT_REPOSITORY https://github.com/libcpr/cpr.git
-    GIT_TAG 3b15fa82ea74739b574d705fea44959b58142eb8)
-FetchContent_MakeAvailable(cpr)
+# HTTP client and JSON library used by SKSE_HTTP (from vcpkg, see vcpkg.json)
+find_package(cpr CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 
 function(add_mantella_plugin TARGET FOLDER)

@@ -1,8 +1,8 @@
 #include <stdio.h>
-#include <Shlobj.h>
-#include <cpr\cpr.h>
+#include <ShlObj.h>
+#include <cpr/cpr.h>
 #include <SKSE_HTTP_TypedDictionary.h>
-#include <nlohmann\json.hpp>
+#include <nlohmann/json.hpp>
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/msvc_sink.h>
 
@@ -340,7 +340,7 @@ void RenameScreenshot(RE::StaticFunctionTag*, std::string newname) {
     char exe_path[_MAX_PATH];
 
     if (ssIndex != nullptr) {
-        int SSidx = ssIndex->GetUInt() - 1;
+        int SSidx = ssIndex->GetUnsignedInteger() - 1;
 
         GetModuleFileNameA(NULL, exe_path, _MAX_PATH);			// Skyrim exe
         std::filesystem::path app_path(exe_path);
