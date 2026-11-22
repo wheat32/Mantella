@@ -30,8 +30,8 @@ The first run sets up a Windows cross-compile toolchain under `build/skse-toolch
 On Windows (this is what the `Build SKSE Plugins` job of the GitHub workflows does):
 
 ```
-cmake -S skse -B build/skse -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=<vcpkg>/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-static-md -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL
-cmake --build build/skse
+cmake -S skse -B build/skse -A x64 -DCMAKE_TOOLCHAIN_FILE=<vcpkg>/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-static-md -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL
+cmake --build build/skse --config Release
 ```
 
 The `.dll` files end up in `build/skse/plugins`. `packaging/build_mod_archive.py` adds the plugins to the mod archive when they are in `dist/skse`.

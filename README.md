@@ -102,7 +102,7 @@ The scripts of the mod are in `mod/Scripts/Source` (`.psc`, plain text). The gam
 STEAM_COMMON_DIR=/path/to/steamapps/common UIEXTENSIONS_BSA=/path/to/mods/UIExtensions/UIExtensions.bsa packaging/compile_scripts.sh
 ```
 
-This runs the Papyrus compiler of the Creation Kit (free on Steam) under Wine. It needs the Creation Kit, Skyrim with SKSE64 (including its script sources), and the UIExtensions mod on your machine; see the top of [packaging/compile_scripts.sh](packaging/compile_scripts.sh). The user and computer name the compiler writes into each compiled script are removed again.
+This runs the Papyrus compiler of the Creation Kit under Wine. It needs "Skyrim Special Edition: Creation Kit" (free on Steam), Skyrim with SKSE64 (including its script sources), and the UIExtensions mod on your machine; the SkyUI sources are fetched from [SkyUI-Community](https://github.com/doodlum/SkyUI-Community). See the top of [packaging/compile_scripts.sh](packaging/compile_scripts.sh). The user and computer name the compiler writes into each compiled script are removed again.
 
 `Mantella.esp` is a binary file. Its contents are also kept as text in `mod/Spriggit_data`, which [Spriggit](https://github.com/Mutagen-Modding/Spriggit) converts to and from the `.esp`.
 
