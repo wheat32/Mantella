@@ -12,6 +12,7 @@ from src.config.config_json_writer import ConfigJsonWriter
 from src.config.config_file_writer import ConfigFileWriter
 from src.config.types.config_value_string import ConfigValueString
 import src.utils as utils
+from src.wine import to_windows_path
 from pathlib import Path
 import json
 import urllib
@@ -35,7 +36,7 @@ class ConfigLoader:
             logger.log(24,"Cannot find 'config.ini'. Assuming first time usage of MantellaSoftware and creating it.")
             self.__write_config_state(self.__definitions)
 
-        config = configparser.ConfigParser()
+        config = configparser.ConfigParser(interpolation=None) # values such as prompts may contain '%'
         try:
             config.read(self.__file_name, encoding='utf-8')
         except Exception as e:
@@ -104,7 +105,7 @@ class ConfigLoader:
             writer.write(self.__file_name, definitions, create_back_up_configini)
         except Exception as e:
             utils.play_error_sound()
-            logger.error(24, f"Failed to write default 'config.ini'. Possible reason: MantellaSoftware does not have rights to write at its location. Exception: {repr(e)}")
+            logger.error(f"Failed to write 'config.ini'. Possible reason: MantellaSoftware does not have rights to write at its location. Exception: {repr(e)}")
 
     def __update_config_values_from_current_state(self):
         self.__definitions.clear_constraint_violations()
@@ -173,8 +174,8 @@ class ConfigLoader:
                     self.game_path = None
                     self.mod_path: str = self.__definitions.get_string_value("skyrim_mod_folder")
 
-                self.lipgen_path = self.__definitions.get_string_value("lipgen_folder")
-                self.facefx_path = self.__definitions.get_string_value("facefx_folder")
+                self.lipgen_path = to_windows_path(self.__definitions.get_string_value("lipgen_folder"))
+                self.facefx_path = to_windows_path(self.__definitions.get_string_value("facefx_folder"))
 
             self.mod_path_base = self.mod_path
             self.mod_path += os.path.join("/", "Sound", "Voice", "Mantella.esp")
@@ -211,8 +212,8 @@ class ConfigLoader:
 
             self.xtts_server_path = self.__definitions.get_string_value("xtts_server_folder", validate_xtts_path)
             self.xvasynth_path = self.__definitions.get_string_value("xvasynth_folder", validate_xvasynth_path)
-            if not hasattr(self, 'piper_path'): # assign Piper path from config if not running integrated
-                self.piper_path = self.__definitions.get_string_value("piper_folder", validate_piper_path)
+            if not self.is_run_integrated: # assign Piper path from config if not running integrated
+                self.piper_path = to_windows_path(self.__definitions.get_string_value("piper_folder", validate_piper_path))
 
             self.lip_generation = self.__definitions.get_string_value("lip_generation").strip().lower()
             self.fast_response_mode = self.__definitions.get_bool_value("fast_response_mode")
@@ -239,9 +240,10 @@ class ConfigLoader:
             #STT
             self.stt_service = self.__definitions.get_string_value("stt_service").lower()
             self.moonshine_model = self.__definitions.get_string_value("moonshine_model_size")
-            if not hasattr(self, 'moonshine_folder'):
+            self.stt_name_correction = self.__definitions.get_bool_value("stt_name_correction")
+            if not self.is_run_integrated:
                 try:
-                    self.moonshine_folder = str(Path(self.__definitions.get_string_value("moonshine_folder")).parent) # go up one folder since moonshine/ is in the model name
+                    self.moonshine_folder = str(Path(to_windows_path(self.__definitions.get_string_value("moonshine_folder"))).parent) # go up one folder since moonshine/ is in the model name
                 except:
                     self.moonshine_folder = ''
             self.whisper_model = self.__definitions.get_string_value("whisper_model_size")

@@ -213,8 +213,15 @@ class ChatManager:
                 error_text = f"Text-to-Speech Error: {e}"
                 logger.log(29, error_text)
                 return Sentence(SentenceContent(character_to_talk, text, content.sentence_type, True), "", 0, error_text)
+            try:
+                audio_duration = utils.get_audio_duration(audio_file)
+            except Exception as e:
+                utils.play_error_sound()
+                error_text = f"Text-to-Speech Error: could not read the generated voiceline '{audio_file}': {e}"
+                logger.log(29, error_text)
+                return Sentence(SentenceContent(character_to_talk, text, content.sentence_type, True), "", 0, error_text)
             self.__is_first_sentence = False
-            return Sentence(SentenceContent(character_to_talk, text, content.sentence_type, content.is_system_generated_sentence, content.actions), audio_file, utils.get_audio_duration(audio_file), played_externally=played_externally, synthesis_start_time=synthesis_start_time)
+            return Sentence(SentenceContent(character_to_talk, text, content.sentence_type, content.is_system_generated_sentence, content.actions), audio_file, audio_duration, played_externally=played_externally, synthesis_start_time=synthesis_start_time)
 
     def __should_stream_first_line(self) -> bool:
         """Whether the next synthesized voiceline should be streamed from the TTS server and played externally as it arrives (Streamed Fast Response)"""

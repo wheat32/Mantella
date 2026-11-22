@@ -59,6 +59,13 @@ class STTDefinitions:
         return ConfigValueString("ptt_hotkey", "Push-to-Talk Hotkey", description, "V", tags=[ConfigValueTag.advanced,ConfigValueTag.share_row])
     
     @staticmethod
+    def get_stt_name_correction_config_value() -> ConfigValue:
+        description = """If enabled, words in your mic input that sound like the name of an NPC in the conversation are replaced with that name (eg "roll off" -> "Ralof").
+                        This only applies to Moonshine, which (unlike Whisper) cannot be given the names of the NPCs in advance and so tends to mishear them.
+                        Disable this setting if ordinary words are being replaced with NPC names."""
+        return ConfigValueBool("stt_name_correction", "Name Correction", description, True, tags=[ConfigValueTag.advanced])
+
+    @staticmethod
     def get_play_cough_sound_config_value() -> ConfigValue:
         description = """If enabled, a generic cough sound will play when the speech-to-text service fails to transcribe player input.
                         Enable this setting if you are playing in VR / full screen and need an audio cue to know when you haven't been heard.

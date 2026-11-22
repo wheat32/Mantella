@@ -18,7 +18,7 @@ class ConfigValueMultiSelection(ConfigValue[list[str]]):
             return result
         if all(e in self.__options for e in value_to_check):
             return ConfigValueConstraintResult()
-        return ConfigValueConstraintResult(f"All chosen elements for {self.__name} must be from {', '.join(self.__options[:-1]) + ' or ' + self.__options[-1]}")
+        return ConfigValueConstraintResult(f"All chosen elements for {self.name} must be from {', '.join(self.__options[:-1]) + ' or ' + self.__options[-1]}")
     
     def parse(self, config_value: str) -> ConfigValueConstraintResult:
         try:

@@ -145,6 +145,7 @@ Use tools to perform actions where appropriate.
 Output ONLY spoken dialogue. No narration, no descriptions, no thoughts.
 Do not use quotation marks.
 Stay in character.
+The player's words may reach you garbled or incomplete. Never mention microphones, speech recognition, transcripts, screens, images, or anything else from outside the game world. If what the player says is unclear, react as your character would to someone mumbling (eg ask them to speak up or repeat themselves).
 
 Respond as {name} now in {language}."""
         return ConfigValueString("skyrim_prompt","Skyrim Prompt",PromptDefinitions.BASE_PROMPT_DESCRIPTION,skyrim_prompt_value,[PromptDefinitions.PromptChecker(PromptDefinitions.ALLOWED_PROMPT_VARIABLES)])
@@ -171,6 +172,7 @@ Use your own discretion to decide who should speak in a given situation (sometim
 Output ONLY spoken dialogue. No narration, no descriptions, no thoughts.
 Do not use quotation marks.
 Stay in character.
+The player's words may reach you garbled or incomplete. Never mention microphones, speech recognition, transcripts, screens, images, or anything else from outside the game world. If what the player says is unclear, react as your character would to someone mumbling (eg ask them to speak up or repeat themselves).
 
 Remember, you can only respond as {names}. Ensure to use their full name when responding. Respond now in {language}."""
         return ConfigValueString("skyrim_multi_npc_prompt","Skyrim Multi-NPC Prompt",PromptDefinitions.BASE_PROMPT_DESCRIPTION,skyrim_multi_npc_prompt,[PromptDefinitions.PromptChecker(PromptDefinitions.ALLOWED_PROMPT_VARIABLES)])
@@ -221,6 +223,7 @@ Use tools to perform actions where appropriate.
 Output ONLY spoken dialogue. No narration, no descriptions, no thoughts.
 Do not use quotation marks.
 Stay in character.
+The player's words may reach you garbled or incomplete. Never mention microphones, speech recognition, transcripts, screens, images, or anything else from outside the game world. If what the player says is unclear, react as your character would to someone mumbling (eg ask them to speak up or repeat themselves).
 
 Respond as {name} now in {language}."""
         return ConfigValueString("fallout4_prompt","Fallout 4 Prompt",PromptDefinitions.BASE_PROMPT_DESCRIPTION,fallout4_prompt,[PromptDefinitions.PromptChecker(PromptDefinitions.ALLOWED_PROMPT_VARIABLES)])
@@ -247,6 +250,7 @@ Use your own discretion to decide who should speak in a given situation (sometim
 Output ONLY spoken dialogue. No narration, no descriptions, no thoughts.
 Do not use quotation marks.
 Stay in character.
+The player's words may reach you garbled or incomplete. Never mention microphones, speech recognition, transcripts, screens, images, or anything else from outside the game world. If what the player says is unclear, react as your character would to someone mumbling (eg ask them to speak up or repeat themselves).
 
 Remember, you can only respond as {names}. Ensure to use their full name when responding. Respond now in {language}."""
         return ConfigValueString("fallout4_multi_npc_prompt","Fallout 4 Multi-NPC Prompt",PromptDefinitions.BASE_PROMPT_DESCRIPTION,fallout4_multi_npc_prompt,[PromptDefinitions.PromptChecker(PromptDefinitions.ALLOWED_PROMPT_VARIABLES)])
@@ -300,7 +304,7 @@ Here is some information about the characters for context:
 Here are the previous conversation summaries for context:
 {conversation_summaries}
 
-It is not necessary to comment on any mixups in communication such as mishearings. Text contained within brackets state in-game events.
+Summarize only what happened within the game world. Never mention mixups in communication such as mishearings, garbled, unclear or repeated messages, and never mention microphones, speech recognition or other technical problems. If part of the conversation was unintelligible, leave it out entirely. Text contained within brackets state in-game events.
 Please summarize the conversation into a single paragraph in {language}."""
         return ConfigValueString("memory_prompt","Memory Prompt",memory_prompt_description,memory_prompt,[PromptDefinitions.PromptChecker(["name", "language", "game", "bios", "conversation_summaries", "player_name", "genders", "races", "genders_and_races"])])
     
@@ -322,7 +326,7 @@ Please summarize the conversation into a single paragraph in {language}."""
                                                 race = the NPC's race
                                                 player_name = the player's name"""
         resummarize_prompt = """You are tasked with summarizing the conversation history between {name} and {player_name} (the player) / other characters. These conversations take place in {game}.
-Each paragraph represents a conversation at a new point in time. Timestamps in square brackets (eg [Day 42, 5 in the early evening]) indicate when each conversation occurred. Please summarize these conversations into a single paragraph in {language}."""
+Each paragraph represents a conversation at a new point in time. Timestamps in square brackets (eg [Day 42, 5 in the early evening]) indicate when each conversation occurred. Please summarize these conversations into a single paragraph in {language}. Leave out any mention of mishearings, garbled messages or technical problems such as microphone or speech recognition issues."""
         return ConfigValueString("resummarize_prompt","Resummarize Prompt",resummarize_prompt_description,resummarize_prompt,[PromptDefinitions.PromptChecker(["name", "language", "game", "player_name", "gender", "race"])])
     
     @staticmethod

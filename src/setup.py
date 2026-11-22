@@ -9,6 +9,8 @@ import sys
 from src.config.config_loader import ConfigLoader
 from src.telemetry.telemetry import get_telemetry_manager
 from src.actions.function_manager import FunctionManager
+from src.ui.log_buffer import get_log_buffer
+from src.wine import to_host_path
 
 class MantellaSetup:
     def __init__(self):
@@ -28,12 +30,13 @@ class MantellaSetup:
         self.config.actions = FunctionManager.get_legacy_actions()
 
         logger = utils.get_logger()
+        # to_host_path shows the paths as they are on the host system when running under Wine / Proton
         logger.log(23, f'''Mantella.exe running in:
-    {os.getcwd()}
+    {to_host_path(os.getcwd())}
 Conversation histories, config.ini, and logging.log available in:
-    {self.save_folder}''')
+    {to_host_path(self.save_folder)}''')
         logger.log(23, f'''Mantella currently running for {self.config.game.display_name}. Mantella mod files located in: 
-    {self.config.mod_path_base}''')
+    {to_host_path(self.config.mod_path_base)}''')
         if not self.config.have_all_config_values_loaded_correctly:
             logger.error("Cannot start Mantella. Not all settings that are required are set to correct values:")
             violations = self.config.get_constraint_failures()
@@ -87,7 +90,9 @@ Conversation histories, config.ini, and logging.log available in:
         logging_level = logging.DEBUG if advanced_logs else logging.INFO
         logger = utils.get_logger()
         logger.propagate = False
-        logger.level = logging_level
+        # setLevel (rather than assigning the level directly) also resets the logger's cache of enabled levels.
+        # Without this, levels used before logging was set up (eg 'Startup' messages while loading the config) would stay disabled
+        logger.setLevel(logging_level)
 
         # create custom formatter
         formatter = cf.CustomFormatter()
@@ -109,11 +114,17 @@ Conversation histories, config.ini, and logging.log available in:
         logger.addHandler(console_handler)
         logger.addHandler(file_handler)
 
+        # keep recent messages in memory to show them in the web UI
+        log_buffer = get_log_buffer()
+        log_buffer.setLevel(logging_level)
+        logger.addHandler(log_buffer)
+
         # custom levels
         logging.addLevelName(21, "INFO")
         logging.addLevelName(22, "INFO")
         logging.addLevelName(23, "INFO")
         logging.addLevelName(24, "Startup")
+        logging.addLevelName(25, "INFO")
 
         logging.addLevelName(27, "STT")
         logging.addLevelName(28, "LLM")

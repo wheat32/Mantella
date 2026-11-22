@@ -122,7 +122,7 @@ def test_setup_logging(mantella_setup: MantellaSetup, tmp_path: Path):
     
     # Verify logger configuration
     assert mantella_logger.level == logging.INFO
-    assert len(mantella_logger.handlers) == 2  # Console and file handler
+    assert len(mantella_logger.handlers) == 3  # Console handler, file handler and the buffer shown in the web UI
     
     # Test with advanced_logs=True
     mantella_logger.handlers = []  # Clear handlers
@@ -130,7 +130,7 @@ def test_setup_logging(mantella_setup: MantellaSetup, tmp_path: Path):
     
     # Verify logger configuration
     assert mantella_logger.level == logging.DEBUG
-    assert len(mantella_logger.handlers) == 2
+    assert len(mantella_logger.handlers) == 3  # Console handler, file handler and the buffer shown in the web UI
 
 
 def test_get_language_info_valid(mantella_setup: MantellaSetup, languages_csv_file: str):

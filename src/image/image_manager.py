@@ -9,6 +9,7 @@ import ctypes
 from pathlib import Path
 from src.config.definitions.game_definitions import GameEnum
 import platform
+from src.wine import is_running_under_wine
 
 if platform.system() == "Windows":
     import win32gui
@@ -69,6 +70,9 @@ class ImageManager:
             os.makedirs(self.__image_path, exist_ok=True)
 
         self.__capture_params = None
+        self.__has_black_screenshot_warning_happened: bool = False
+        # In-game screenshots are taken by the Fallout 4 mod only
+        self.__game_screenshots_supported: bool = game.base_game == GameEnum.FALLOUT4
 
         if platform.system() != "Windows":
             return
@@ -196,6 +200,24 @@ class ImageManager:
         return np.array(screenshot), screenshot.width, screenshot.height
     
 
+    @staticmethod
+    def _is_blank(image: np.ndarray, brightness_threshold: int = 16, max_bright_fraction: float = 0.001) -> bool:
+        '''Check whether an image is (nearly) all black, as returned when a window cannot be captured
+
+        Args:
+            image (numpy.ndarray): The captured image (BGR or BGRA)
+            brightness_threshold (int): The value above which a color channel counts as lit
+            max_bright_fraction (float): The fraction of lit values up to which the image still counts as blank
+
+        Returns:
+            bool: Whether the image contains no meaningful content
+        '''
+        if image is None or image.size == 0:
+            return True
+        color_channels = image[..., :3] if image.ndim == 3 else image # ignore the alpha channel
+        return np.count_nonzero(color_channels > brightness_threshold) <= color_channels.size * max_bright_fraction
+
+
     @utils.time_it
     def _get_screenshot(self) -> tuple[np.ndarray, int, int]:
         '''Search for saved screenshots that have been taken in-game, removing them once loaded
@@ -242,6 +264,21 @@ class ImageManager:
                     return None
             else:
                 screenshot, width, height = self._take_screenshot(params)
+                if self._is_blank(screenshot):
+                    # A blank capture tells the LLM nothing, and can lead to NPCs commenting on the "black screen"
+                    if self.__game_image_file_path is not None and os.path.exists(self.__game_image_file_path):
+                        logger.log(23, 'Captured image of the game window is blank. Using the in-game screenshot instead')
+                        screenshot, width, height = self._get_screenshot()
+                    else:
+                        if not self.__has_black_screenshot_warning_happened:
+                            self.__has_black_screenshot_warning_happened = True
+                            hint = ' This is common when running under Wine / Proton.' if is_running_under_wine() else ''
+                            if self.__game_screenshots_supported:
+                                advice = 'try enabling `Vision`->`Use Game Screenshots` in the Mantella UI'
+                            else:
+                                advice = 'try running the game in windowed / borderless mode and make sure the game window is not covered by other windows'
+                            logger.warning(f'Captured image of the game window is blank, so it will not be sent to the LLM.{hint} If this keeps happening, {advice}')
+                        return None
 
             # Process
             screenshot = self._resize_image(screenshot, width, height)

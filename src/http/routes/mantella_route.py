@@ -1,7 +1,9 @@
 import json
 from typing import Any, Hashable
 
+from threading import Lock
 from fastapi import FastAPI, Request
+from fastapi.concurrency import run_in_threadpool
 from src.config.config_loader import ConfigLoader
 from src.games.fallout4 import Fallout4
 from src.games.gameable import Gameable
@@ -32,6 +34,8 @@ class mantella_route(routeable):
         super().__init__(config)
         self.__language_info: dict[Hashable, str] = language_info
         self.__game: GameStateManager | None = None
+        self.__has_deferred_config_change_been_logged: bool = False
+        self.__request_lock: Lock = Lock()
 
         # if not self._can_route_be_used():
         #     error_message = "MantellaSoftware settings faulty. Please check MantellaSoftware's window or log."
@@ -60,11 +64,34 @@ class mantella_route(routeable):
         chat_manager = ChatManager(self._config, tts, llm_client, game)
         self.__game = GameStateManager(game, chat_manager, self._config, self.__language_info, llm_client, summary_client)
 
+    def __should_defer_config_changes(self, received_json: dict[str, Any] | None) -> bool:
+        """Settings changed in the UI while a conversation is running are only applied once that conversation has ended.
+        Applying them straight away would rebuild the LLM / TTS / STT services and cut the conversation off mid-sentence
+        """
+        if not self.__game or not self.__game.is_conversation_active or not received_json:
+            self.__has_deferred_config_change_been_logged = False
+            return False
+        request_type = received_json.get(comm_consts.KEY_REQUESTTYPE)
+        is_conversation_request = request_type in (comm_consts.KEY_REQUESTTYPE_CONTINUECONVERSATION, comm_consts.KEY_REQUESTTYPE_PLAYERINPUT, comm_consts.KEY_REQUESTTYPE_ENDCONVERSATION)
+        if not is_conversation_request:
+            return False
+        if self._config.has_any_config_value_changed and not self.__has_deferred_config_change_been_logged:
+            self.__has_deferred_config_change_been_logged = True
+            logger.log(24, 'Settings have been changed during a conversation. The new settings will be applied once the current conversation has ended')
+        return True
+
     @utils.time_it
     def add_route_to_server(self, app: FastAPI):
         @app.post("/mantella")
         async def mantella(request: Request):
-            if not self._can_route_be_used():
+            received_json: dict[str, Any] | None = await request.json()
+            # Requests can block for a long time (eg while waiting for the player to speak).
+            # Handling them in a worker thread keeps the rest of the server (eg the settings UI) responsive in the meantime
+            return await run_in_threadpool(self._handle_request, received_json)
+
+    def _handle_request(self, received_json: dict[str, Any] | None) -> dict[str, Any]:
+        with self.__request_lock: # the game's requests are still processed strictly one after the other
+            if not self._can_route_be_used(self.__should_defer_config_changes(received_json)):
                 error_message = "MantellaSoftware settings faulty. Please check MantellaSoftware's window or log."
                 logger.error(error_message)
                 return self.error_message(error_message)
@@ -73,7 +100,6 @@ class mantella_route(routeable):
                 logger.error(error_message)
                 return self.error_message(error_message)
             reply = {}
-            received_json: dict[str, Any] | None = await request.json()
             if received_json:
                 logger.debug('Processing request...')
                 if self._config.show_http_debug_messages:

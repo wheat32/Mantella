@@ -17,6 +17,8 @@ from queue import Queue
 from threading import Thread, Event
 from src.config.definitions.game_definitions import GameEnum
 import platform
+import hashlib
+import unicodedata
 
 if platform.system() == "Windows":
     from subprocess import STARTUPINFO, STARTF_USESHOWWINDOW
@@ -114,9 +116,7 @@ class TTSable(ABC):
             #new_wav_file_name = f"{self._voiceline_folder}/save/{timestamp + final_voiceline_file_name}.wav" 
 
             #Use a sanitized version of the voice text as filename
-            unique_name: str  = f'{voice} {voiceline.strip()}'[:150]
-            new_name: str = "".join(c for c in unique_name if c not in r'\/:*?"<>|.')
-            new_wav_file_name = f'{self._voiceline_folder}/save/{new_name.strip()}.wav'
+            new_wav_file_name = f'{self._voiceline_folder}/save/{self._get_voiceline_file_name(voice, voiceline)}.wav'
 
             new_lip_file_name = new_wav_file_name.replace(".wav", ".lip")
             new_fuz_file_name = new_wav_file_name.replace(".wav", ".fuz")
@@ -127,15 +127,20 @@ class TTSable(ABC):
             try:
                 os.rename(final_voiceline_file, new_wav_file_name)
             except Exception as ex:
-                logger.warning(f'{type(ex).__name__}: {ex.args}')
+                # keep using the original file, as the renamed one does not exist
+                logger.warning(f'Could not rename voiceline to {new_wav_file_name}: {type(ex).__name__}: {ex.args}')
+                return final_voiceline_file, played_externally
 
             if (self._lip_generation_enabled == 'enabled') or (self._lip_generation_enabled == 'lazy' and not synth_options.is_first_line_of_response):
+                lip_file_name = final_voiceline_file.replace(".wav", ".lip")
                 try:
                     if os.path.exists(new_lip_file_name):
                         os.remove(new_lip_file_name)
-                    os.rename(final_voiceline_file.replace(".wav", ".lip"), new_lip_file_name)
-                except:
-                    logger.error(f'Could not rename {final_voiceline_file.replace(".wav", ".lip")}')
+                    # if lip generation failed, a warning explaining why has already been logged
+                    if os.path.exists(lip_file_name):
+                        os.rename(lip_file_name, new_lip_file_name)
+                except Exception as ex:
+                    logger.error(f'Could not rename {lip_file_name}: {type(ex).__name__}: {ex}')
             try:
                 fuz_file_name = final_voiceline_file.replace(".wav", ".fuz")
                 if (os.path.exists(fuz_file_name)):
@@ -150,6 +155,20 @@ class TTSable(ABC):
         # if (self.debug_mode == '1') & (self.play_audio_from_script == '1'):
         #     winsound.PlaySound(final_voiceline_file, winsound.SND_FILENAME)
         return final_voiceline_file, played_externally
+
+
+    @staticmethod
+    def _get_voiceline_file_name(voice: str, voiceline: str) -> str:
+        """Builds a file name for a voiceline out of its (LLM generated) text.
+
+        Only plain ASCII letters, digits and a few safe symbols are kept, as other characters (eg typographic quotes and dashes)
+        cannot be relied on in file names on every system (notably under Wine / Proton). A short hash keeps names unique
+        """
+        text = f'{voice} {voiceline.strip()}'
+        text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('ascii')
+        safe_name = "".join(c for c in text if c.isalnum() or c in " -_',!").strip()[:100].strip()
+        text_hash = hashlib.sha1(f'{voice} {voiceline}'.encode('utf-8')).hexdigest()[:8]
+        return f'{safe_name} {text_hash}'.strip()
 
 
     @abstractmethod
@@ -412,21 +431,48 @@ class TTSable(ABC):
             skip_lip_generation (bool): Whether to skip the lip file generation process and use a placeholder .lip file instead (useful for when FaceFXWrapper is experiencing issues)
         """
         @utils.time_it
-        def run_facefx_command(command, facefx_path) -> None:
+        def run_facefx_command(executable: Path, arguments: list[str], facefx_path: str) -> subprocess.CompletedProcess | None:
+            """Runs one of the lip sync tools directly (no intermediary script), logging its output if it fails
+
+            The executable is called by its absolute path so that it does not rely on a script being written to and run from
+            the tool's folder, which fails if that folder only exists in a mod manager's virtual file system or when running under Wine
+            """
+            command: list[str] = [os.path.abspath(executable)] + arguments
+            run_args: dict = {'capture_output': True, 'text': True, 'errors': 'replace', 'timeout': 60}
             if platform.system() == "Windows":
                 startupinfo = STARTUPINFO()
                 startupinfo.dwFlags |= STARTF_USESHOWWINDOW
-                creationflags = subprocess.CREATE_NO_WINDOW
-                batch_file_path = Path(facefx_path) / "run_mantella_command.bat"
-                with open(batch_file_path, 'w', encoding='utf-8') as file:
-                    file.write(f"@echo off\n{command} >nul 2>&1")
-                subprocess.run(batch_file_path, cwd=facefx_path, creationflags=creationflags)
+                run_args['startupinfo'] = startupinfo
+                run_args['creationflags'] = subprocess.CREATE_NO_WINDOW
             else:
-                bash_file_path = Path(facefx_path) / "run_mantella_command.sh"
-                user_shell = utils.get_user_shell()
-                with open(bash_file_path, 'w', encoding='utf-8') as file:
-                    file.write(f"#!{user_shell}\nwine {command} > /dev/null 2>&1")
-                subprocess.run([user_shell, str(bash_file_path)], cwd=facefx_path)
+                command = ['wine'] + command
+
+            try:
+                try:
+                    result = subprocess.run(command, cwd=facefx_path, **run_args)
+                except OSError as e:
+                    # The tool's folder cannot always be used as a working directory (eg if it only exists in a virtual file system).
+                    # As all paths passed to the tool are absolute, it can be run from the current directory instead
+                    logger.debug(f'Could not run {executable.name} from "{facefx_path}" ({e}). Retrying from the current directory...')
+                    result = subprocess.run(command, **run_args)
+            except subprocess.TimeoutExpired:
+                logger.warning(f'{executable.name} did not finish within {run_args["timeout"]} seconds')
+                return None
+            except OSError as e:
+                logger.warning(f'Could not run {executable.name}: {e}')
+                return None
+
+            output = "\n".join(part.strip() for part in (result.stdout, result.stderr) if part and part.strip())
+            if result.returncode != 0:
+                logger.warning(f'{executable.name} exited with code {result.returncode}.{" Output: " + output if output else ""}')
+            elif output:
+                logger.debug(f'{executable.name} output: {output}')
+            return result
+
+
+        def normalize_path(path: str) -> str:
+            """Voiceline paths are built with a mix of forward and backward slashes, which not every tool accepts"""
+            return os.path.normpath(path) if platform.system() == "Windows" else path
 
 
         def copy_placeholder_lip_file(lip_file: str, game: str) -> None:
@@ -458,7 +504,7 @@ class TTSable(ABC):
                 #Using subprocess.run to retrieve the exit code
                 args: str = f'"{LipGen_path}" "{wav_file}" "{voiceline}" -Language:{language_parm} -Automated'
                 run_result: subprocess.CompletedProcess = subprocess.run(args, cwd=self._voiceline_folder, stderr=DEVNULL, stdout=DEVNULL,
-                                                                         creationflags=subprocess.CREATE_NO_WINDOW)
+                                                                         creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
                 if run_result.returncode != 0 and len(voiceline) > 11 :
                     #Very short sentences sometimes fail to generate a .lip file, so skip warning
                     logger.warning(f'Lipgen returned {run_result.returncode}')
@@ -479,22 +525,23 @@ class TTSable(ABC):
         
                 # Run FaceFXWrapper.exe
                 r_wav = wav_file.replace(".wav", "_r.wav")
-                commands = [
-                    face_wrapper_executable.name,
+                result = run_facefx_command(face_wrapper_executable, [
                     game,
                     "USEnglish",
-                    cdf_path.name,
-                    f'"{wav_file}"',
-                    f'"{r_wav}"',
-                    f'"{lip_file}"',
-                    f'"{voiceline}"'
-                ]
-                command = " ".join(commands)
-                run_facefx_command(command, facefx_path)
+                    os.path.abspath(cdf_path),
+                    normalize_path(wav_file),
+                    normalize_path(r_wav),
+                    normalize_path(lip_file),
+                    voiceline
+                ], facefx_path)
 
                 # remove file created by FaceFXWrapper
-                if os.path.exists(wav_file.replace(".wav", "_r.wav")):
-                    os.remove(wav_file.replace(".wav", "_r.wav"))
+                if os.path.exists(r_wav):
+                    os.remove(r_wav)
+
+                if not os.path.exists(lip_file):
+                    exit_code = result.returncode if result else 'unknown'
+                    logger.warning(f'FaceFXWrapper did not create a lip sync file for the voiceline (exit code: {exit_code}). The voiceline will play without lip sync. FaceFXWrapper folder: "{facefx_path}"')
 
         def generate_fuz_file(facefx_path: str, wav_file: str, lip_file: str) -> None:
             #Fuz files needed for Fallout only
@@ -504,7 +551,7 @@ class TTSable(ABC):
             if os.path.exists(LipFuz_path):
                 args: str = f'"{LipFuz_path}" -s "{self._voiceline_folder}" -d "{self._voiceline_folder}" -a wav --norec'
                 run_result: subprocess.CompletedProcess = subprocess.run(args, cwd=self._voiceline_folder, stdout=DEVNULL, stderr=DEVNULL,
-                                                                         creationflags=subprocess.CREATE_NO_WINDOW)
+                                                                         creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
                 if run_result.returncode != 0:
                     logger.warning(f'LipFuzer returned {run_result.returncode}')
             else:
@@ -521,24 +568,10 @@ class TTSable(ABC):
                     raise FileNotFoundError()
 
                 xwm_file = wav_file.replace(".wav", ".xwm")
-                xwmcmds = [
-                    xWMAEncode_executable.name,
-                    f'"{wav_file}"',
-                    f'"{xwm_file}"'
-                    ]
-                xwm_command = " ".join(xwmcmds)
-                run_facefx_command(xwm_command, facefx_path)
+                run_facefx_command(xWMAEncode_executable, [normalize_path(wav_file), normalize_path(xwm_file)], facefx_path)
 
                 fuzfile = wav_file.replace(".wav", ".fuz")
-                fuzcmds = [
-                    fuz_extractor_executable.name,
-                    "-c",
-                    f'"{fuzfile}"',
-                    f'"{lip_file}"',
-                    f'"{xwm_file}"'
-                    ]
-                fuz_command = " ".join(fuzcmds)
-                run_facefx_command(fuz_command, facefx_path)
+                run_facefx_command(fuz_extractor_executable, ["-c", normalize_path(fuzfile), normalize_path(lip_file), normalize_path(xwm_file)], facefx_path)
 
         try:
             

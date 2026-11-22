@@ -5,6 +5,7 @@ import string
 import sys
 import os
 import threading
+import tempfile
 from shutil import rmtree
 import wave
 from charset_normalizer import detect
@@ -80,6 +81,16 @@ def resolve_path():
         resolved_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
     return resolved_path
+
+
+def get_version(default: str = '') -> str:
+    """Reads the version of this build from version.json, which is also what releases are tagged with"""
+    try:
+        import json
+        with open(os.path.join(resolve_path(), 'version.json'), 'r', encoding='utf-8') as f:
+            return str(json.load(f)['app_version'])
+    except Exception:
+        return default
 
 
 def play_mantella_ready_sound():
@@ -160,7 +171,7 @@ def get_audio_duration(audio_file: str):
 
 def get_tmp_dir() -> str:
     if platform.system() == "Windows":
-        return os.getenv("TMP")
+        return os.getenv("TMP") or os.getenv("TEMP") or tempfile.gettempdir()
     else:
         envvars = ["TMPDIR", "TEMP", "TMP"]
         for envvar in envvars:
@@ -415,6 +426,18 @@ def resolve_service_endpoint(value: str) -> str:
 def is_local_url(url: str) -> bool:
     domain = urlparse(url).netloc
     return domain.startswith("10.") or domain.startswith("127.") or domain.startswith("192.168") or domain.startswith("172.") or domain.startswith("localhost")
+
+
+def get_known_model_family_token_limit(model_name: str) -> int | None:
+    """Returns the context size of a model based on the family it belongs to, for models that are not listed individually.
+
+    Every current Claude model has a context size of at least 200k tokens,
+    so new Claude releases do not need to be added one by one (eg 'claude-haiku-5-5', 'anthropic/claude-sonnet-4.5:beta')
+    """
+    name = (model_name or '').split('/')[-1].strip().lower()
+    if name.startswith('claude'):
+        return 200_000
+    return None
 
 
 def get_model_token_limits():

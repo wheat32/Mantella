@@ -53,6 +53,11 @@ class GameStateManager:
         self.__random_selector = RandomLLMSelector()
 
 
+    @property
+    def is_conversation_active(self) -> bool:
+        """Whether a conversation is currently running"""
+        return self.__talk is not None
+
     @utils.time_it
     def start_conversation(self, input_json: dict[str, Any]) -> dict[str, Any]:
         if self.__talk: #This should only happen if game and server are out of sync due to some previous error -> close conversation and start a new one
@@ -170,6 +175,7 @@ class GameStateManager:
                     self.__should_reload = True
             else:
                 self.__talk.end()
+                self.__talk = None # prevent the conversation from being ended (and summarized) a second time
                 return self.error_message(sentence_to_play.error_message)        
         return reply
 

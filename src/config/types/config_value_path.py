@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import Callable
 import os
 from pathlib import Path
 from tkinter import Tk, filedialog
@@ -7,14 +8,21 @@ from threading import Thread
 from src.config.config_value_constraint import ConfigValueConstraint, ConfigValueConstraintResult
 from src.config.types.config_value_visitor import ConfigValueVisitor
 from src.config.types.config_value import ConfigValue, ConfigValueTag
+from src.wine import to_windows_path
 
 class FileOrFolder(Enum):
     FILE = 1
     FOLDER = 2
 
 class ConfigValuePath(ConfigValue[str]):
-    def __init__(self, identifier: str, name: str, description: str, default_value: str, file_or_folder_that_must_be_present: str | None, constraints: list[ConfigValueConstraint[str]] = [], is_hidden: bool = False, tags: list[ConfigValueTag] = []):
+    def __init__(self, identifier: str, name: str, description: str, default_value: str, file_or_folder_that_must_be_present: str | None, constraints: list[ConfigValueConstraint[str]] = [], is_hidden: bool = False, tags: list[ConfigValueTag] = [], is_required: Callable[[], bool] | None = None):
+        """
+        Args:
+            is_required: Optional check of whether the path is currently needed (eg whether the service it belongs to is selected).
+                While it returns False, the path is not validated, so that paths of unused services are not flagged as errors
+        """
         super().__init__(identifier, name, description, default_value, constraints, is_hidden, tags)
+        self.__is_required: Callable[[], bool] | None = is_required
         self.__file_or_folder_that_must_be_present: str | None = file_or_folder_that_must_be_present
     
     @property
@@ -74,7 +82,29 @@ class ConfigValuePath(ConfigValue[str]):
                 root.destroy()
                 result.append(str(filename))        
     
+    @property
+    def is_required(self) -> bool:
+        if self.__is_required is None:
+            return True
+        try:
+            return self.__is_required()
+        except Exception:
+            return True
+
+    @property
+    def value(self) -> str:
+        return ConfigValue.value.fget(self)
+
+    @value.setter
+    def value(self, value: str):
+        # Under Wine / Proton, paths may be entered the way they are known on the host system (eg '/home/user/Games')
+        ConfigValue.value.fset(self, to_windows_path(value))
+
     def does_value_cause_error(self, value_to_check: str) -> ConfigValueConstraintResult:
+        if not self.is_required:
+            return ConfigValueConstraintResult()
+        value_to_check = to_windows_path(value_to_check)
+
         if not os.path.exists(value_to_check):
             return ConfigValueConstraintResult(f"The selected folder '{value_to_check}' for config value '{self.name}' does not exist!")
 

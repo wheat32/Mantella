@@ -1,0 +1,3 @@
+# Needed to build Mantella.exe (see packaging/build_mod_archive.py)
+pyinstaller==6.11.1
+pyinstaller-hooks-contrib

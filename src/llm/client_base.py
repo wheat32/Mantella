@@ -242,6 +242,7 @@ class ClientBase(AIClient):
     async def streaming_call(self, messages: Message | message_thread, is_multi_npc: bool, tools: list[dict] = None) -> AsyncGenerator[tuple[str, str | list] | None, None]:
         with create_span_from_thread("llm_streaming_call") as span:
             with self._generation_lock:
+                async_client: AsyncOpenAI | None = None # defined up front so that the cleanup below works if an error occurs before the client is created
                 logger.log(28, 'Getting LLM response...')
 
                 if self._request_params:
@@ -471,6 +472,9 @@ For more information, see here: https://art-from-the-machine.github.io/Mantella/
 
         if llm in token_limit_dict:
             token_limit = token_limit_dict[llm]
+        elif utils.get_known_model_family_token_limit(llm):
+            # The model list of the service has not been loaded (or does not report context sizes), but the model family is known
+            token_limit = utils.get_known_model_family_token_limit(llm)
         else:
             logger.log(23, f"Could not find number of available tokens for {llm}. Defaulting to token count of {custom_token_count}. This number can be changed via the `Large Language Model`->`Custom Token Count` / `Vision`->`Custom Vision Model Token Count` settings in the Mantella UI")
             try:

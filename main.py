@@ -1,3 +1,5 @@
+from src.wine import apply_wine_workarounds
+apply_wine_workarounds() # Must run before any native libraries (onnxruntime, ctranslate2) are loaded
 import onnxruntime # Ensure onnxruntime is imported before anything else to avoid pyinstaller DLL load issues
 from src.http.http_server import http_server
 import traceback
@@ -8,8 +10,9 @@ from src.ui.start_ui import StartUI
 import src.utils as utils
 
 def main():
+    logger = utils.get_logger() # assigned before the try block so that startup errors can be logged
     try:
-        mantella_version = '0.14'
+        mantella_version = utils.get_version(default='0.14')
         config, language_info = MantellaSetup().initialise(
             config_file='config.ini',
             logging_file='logging.log', 

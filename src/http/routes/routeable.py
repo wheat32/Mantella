@@ -26,7 +26,15 @@ class routeable(ABC):
         pass
 
     @utils.time_it
-    def _can_route_be_used(self) -> bool:        
+    def _can_route_be_used(self, defer_config_changes: bool = False) -> bool:
+        """Checks whether the route is ready to be used, (re)initializing it if settings have changed
+
+        Args:
+            defer_config_changes (bool): If True, changed settings are not applied yet and the route keeps running on its current settings.
+                Reinitializing a route tears down what it is currently doing (eg an ongoing conversation)
+        """
+        if defer_config_changes and self._has_route_been_initialized:
+            return True
         if not self._has_route_been_initialized or self._config.has_any_config_value_changed:
             self._config.update_config_loader_with_changed_config_values()
             if self._config.have_all_config_values_loaded_correctly:

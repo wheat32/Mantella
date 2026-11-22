@@ -1,5 +1,7 @@
 import sys
 import numpy as np
+from src.wine import apply_wine_workarounds, disable_hugging_face_symlinks, is_running_under_wine
+apply_wine_workarounds() # must run before faster_whisper loads ctranslate2 (see src/wine.py)
 from faster_whisper import WhisperModel
 from src.config.config_loader import ConfigLoader
 from src.llm.client_base import ClientBase
@@ -17,6 +19,7 @@ import threading
 import time
 import os
 import wave
+from difflib import SequenceMatcher
 if TYPE_CHECKING:
     from sounddevice import InputStream
 from silero_vad_lite import SileroVAD
@@ -29,6 +32,173 @@ try:
 except ModuleNotFoundError:
     has_moonshine = False
     logger.warning("moonshine_onnx is not available, Moonshine stt will not work")
+
+MOONSHINE_REPO_ID = 'UsefulSensors/moonshine'
+
+
+def find_empty_files(folder: str) -> list[str]:
+    """Returns all zero-byte files (and broken links) in the given folder and its subfolders.
+    Model files in this state are the result of an interrupted download or, under Wine / Proton, of symlinks that could not be created"""
+    empty_files: list[str] = []
+    if not folder or not os.path.isdir(folder):
+        return empty_files
+    for root, _, files in os.walk(folder):
+        for file in files:
+            path = os.path.join(root, file)
+            try:
+                if os.path.getsize(path) == 0:
+                    empty_files.append(path)
+            except OSError: # broken link
+                empty_files.append(path)
+    return empty_files
+
+
+def get_hugging_face_model_cache_folder(repo_id: str) -> str | None:
+    """Returns the folder in the Hugging Face cache that the given model repo is downloaded to"""
+    try:
+        from huggingface_hub import constants
+        return os.path.join(constants.HF_HUB_CACHE, 'models--' + repo_id.replace('/', '--'))
+    except Exception:
+        return None
+
+
+def get_whisper_repo_id(whisper_model: str) -> str | None:
+    """Returns the Hugging Face repo a faster-whisper model size (eg 'base') is downloaded from"""
+    try:
+        from faster_whisper.utils import _MODELS
+        if whisper_model in _MODELS:
+            return _MODELS[whisper_model]
+    except Exception:
+        pass
+    return whisper_model if whisper_model.count('/') == 1 and not os.path.exists(whisper_model) else None
+
+
+def remove_empty_cached_model_files(repo_id: str | None) -> int:
+    """Removes zero-byte files from a model's Hugging Face cache folder so that they are downloaded again on load
+
+    Returns:
+        int: the number of files removed
+    """
+    if not repo_id:
+        return 0
+    cache_folder = get_hugging_face_model_cache_folder(repo_id)
+    removed = 0
+    for path in find_empty_files(cache_folder):
+        try:
+            os.remove(path)
+            removed += 1
+        except OSError as e:
+            logger.warning(f'Could not remove empty model file {path}: {e}')
+    if removed:
+        logger.warning(f"Found {removed} empty file(s) in the downloaded speech-to-text model '{repo_id}' ({cache_folder}). These have been removed and will be downloaded again")
+    return removed
+
+
+def raise_if_model_files_empty(folder: str, model_name: str):
+    """Raises a descriptive error if a local model folder contains zero-byte files, instead of letting the model loader crash"""
+    empty_files = find_empty_files(folder)
+    if empty_files:
+        message = f"The speech-to-text model '{model_name}' in '{folder}' cannot be loaded because the following file(s) are empty: {', '.join(os.path.basename(f) for f in empty_files)}. Please delete this folder and download the model again."
+        if is_running_under_wine():
+            message += " When running under Wine / Proton, make sure to copy the real model files rather than symlinks to them."
+        utils.play_error_sound()
+        logger.error(message)
+        raise FileNotFoundError(message)
+
+
+def correct_names_in_transcript(transcript: str, names: list[str]) -> str:
+    """Replaces words in a transcript that sound like one of the given names with that name (eg "roll off" -> "Ralof").
+    Speech-to-text models that cannot be prompted with the names of the NPCs in the conversation tend to mishear them
+
+    Args:
+        transcript (str): the transcribed player input
+        names (list[str]): the names of the characters in the conversation
+
+    Returns:
+        str: the transcript with misheard names corrected
+    """
+    if not transcript or not names:
+        return transcript
+
+    # match on full names as well as the individual words they are made up of (eg "Ulfric" in "Ulfric Stormcloak")
+    targets: dict[str, str] = {}
+    for name in names:
+        if not name:
+            continue
+        for target in [name] + name.split():
+            key = _collapse_repeated_letters(_letters_only(target))
+            if len(key) >= 4 and key not in targets:
+                targets[key] = target
+    if not targets:
+        return transcript
+
+    words = transcript.split()
+    corrected: list[str] = []
+    i = 0
+    while i < len(words):
+        replacement: str | None = None
+        for size in (3, 2, 1): # prefer the longest run of words that sounds like a name
+            candidate_words = words[i:i + size]
+            if len(candidate_words) < size:
+                continue
+            # only the last word of a candidate may carry punctuation, to not merge words across sentence boundaries
+            if any(_has_trailing_punctuation(w) for w in candidate_words[:-1]):
+                continue
+            candidate = _collapse_repeated_letters(_letters_only(''.join(candidate_words)))
+            for key, target in targets.items():
+                if _sounds_like(candidate, key):
+                    if size == 1 and _letters_only(candidate_words[0]) == _letters_only(target):
+                        break # already spelled correctly
+                    replacement = target + _get_possessive_and_punctuation(candidate_words[-1])
+                    break
+            if replacement:
+                i += size
+                break
+        if replacement:
+            corrected.append(replacement)
+        else:
+            corrected.append(words[i])
+            i += 1
+    return ' '.join(corrected)
+
+
+def _letters_only(text: str) -> str:
+    text = text.lower()
+    if text.endswith("'s") or text.endswith("’s"):
+        text = text[:-2]
+    return ''.join(c for c in text if c.isalpha())
+
+
+def _collapse_repeated_letters(text: str) -> str:
+    return ''.join(c for i, c in enumerate(text) if i == 0 or c != text[i - 1])
+
+
+def _has_trailing_punctuation(word: str) -> bool:
+    return bool(word) and word[-1] in '.,!?;:'
+
+
+def _get_possessive_and_punctuation(word: str) -> str:
+    stripped = word.rstrip('.,!?;:')
+    punctuation = word[len(stripped):]
+    possessive = "'s" if stripped.lower().endswith(("'s", "’s")) else ''
+    return possessive + punctuation
+
+
+def _consonant_skeleton(text: str) -> str:
+    """A rough phonetic key: the consonant sounds of a word in order"""
+    for old, new in (('ph', 'f'), ('gh', 'g'), ('ck', 'k'), ('qu', 'kw'), ('c', 'k'), ('q', 'k'), ('z', 's'), ('x', 'ks'), ('v', 'f')):
+        text = text.replace(old, new)
+    return _collapse_repeated_letters(''.join(c for c in text if c not in 'aeiouyhw'))
+
+
+def _sounds_like(candidate: str, name: str) -> bool:
+    if not candidate or abs(len(candidate) - len(name)) > 2:
+        return False
+    if _consonant_skeleton(candidate[0]) != _consonant_skeleton(name[0]):
+        return False
+    if _consonant_skeleton(candidate) != _consonant_skeleton(name):
+        return False
+    return SequenceMatcher(None, candidate, name).ratio() >= 0.75
 
 
 class Transcriber:
@@ -57,6 +227,8 @@ class Transcriber:
         self.whisper_service = config.whisper_url
         self.whisper_url = self.__get_endpoint(config.whisper_url)
         self.prompt = ''
+        self.name_correction_enabled: bool = getattr(config, 'stt_name_correction', True) is True
+        self._names_to_correct: list[str] = []
         self.show_mic_warning = True
         self.play_cough_sound = config.play_cough_sound
         self.transcription_times = []
@@ -102,6 +274,9 @@ class Transcriber:
                 logger.error("Moonshine selected but moonshine not installed, trying whisper")
 
             if not self.external_whisper_service:
+                self._prepare_model_download(get_whisper_repo_id(self.whisper_model))
+                if os.path.isdir(self.whisper_model):
+                    raise_if_model_files_empty(self.whisper_model, self.whisper_model)
                 if self.process_device == 'cuda':
                     logger.error(f'''Depending on your NVIDIA CUDA version, setting the Whisper process device to `cuda` may cause errors! For more information, see here: https://github.com/SYSTRAN/faster-whisper#gpu''')
                     try:
@@ -120,9 +295,11 @@ class Transcriber:
             
             if os.path.exists(f'{self.moonshine_model_path}/encoder_model.onnx'):
                 logger.log(self.loglevel, 'Loading local Moonshine model...')
+                raise_if_model_files_empty(self.moonshine_model_path, self.full_moonshine_model)
                 self.transcribe_model = MoonshineOnnxModel(models_dir=self.moonshine_model_path, model_name=self.moonshine_model)
             else:
                 logger.log(self.loglevel, 'Loading Moonshine model from Hugging Face...')
+                self._prepare_model_download(MOONSHINE_REPO_ID)
                 self.transcribe_model = MoonshineOnnxModel(model_name=self.moonshine_model, model_precision=self.moonshine_precision)
             self.tokenizer = load_tokenizer()
         
@@ -149,6 +326,12 @@ class Transcriber:
         self._transcription_ready = threading.Event()
         self._consecutive_empty_count = 0
         self._max_consecutive_empty = 10
+
+    def _prepare_model_download(self, repo_id: str | None) -> None:
+        """Ensures a model downloaded from Hugging Face ends up as real, non-empty files in the cache"""
+        if disable_hugging_face_symlinks():
+            logger.debug('Running under Wine / Proton: speech-to-text models will be downloaded as regular files instead of symlinks')
+        remove_empty_cached_model_files(repo_id)
 
     @property
     def is_listening(self) -> bool:
@@ -227,6 +410,8 @@ If you would prefer to run speech-to-text locally, please ensure the `Speech-to-
         self._speech_end_time = time.time()
         if self.stt_service == 'moonshine':
             transcription = self.moonshine_transcribe(audio)
+            if self.name_correction_enabled and self._names_to_correct:
+                transcription = correct_names_in_transcript(transcription, self._names_to_correct)
         else:
             transcription = self.whisper_transcribe(audio, self.prompt)
 
@@ -274,7 +459,7 @@ If you would prefer to run speech-to-text locally, please ensure the `Speech-to-
                 response_data = client.audio.transcriptions.create(model=self.whisper_model, language=self.language, file=audio_file, prompt=prompt)
             except Exception as e:
                 utils.play_error_sound()
-                if e.code in [404, 'model_not_found']:
+                if getattr(e, 'code', None) in [404, 'model_not_found']:
                     if self.whisper_service == 'OpenAI':
                         logger.error(f"Selected Whisper model '{self.whisper_model}' does not exist in the OpenAI service. Try changing 'Speech-to-Text'->'Model Size' to 'whisper-1' in the Mantella UI")
                     elif self.whisper_service == 'Groq':
@@ -283,7 +468,8 @@ If you would prefer to run speech-to-text locally, please ensure the `Speech-to-
                         logger.error(f"Selected Whisper model '{self.whisper_model}' does not exist in the selected service {self.whisper_service}. Try changing 'Speech-to-Text'->'Model Size' to a compatible model in the Mantella UI")
                 else:
                     logger.error(f'STT error: {e}')
-                input("Press Enter to exit.")
+                client.close()
+                return ''
             client.close()
             if utils.clean_text(response_data.text) in self.__ignore_list: # common phrases hallucinated by Whisper
                 return ''
@@ -327,26 +513,38 @@ If you would prefer to run speech-to-text locally, please ensure the `Speech-to-
 
 
     @utils.time_it
-    def start_listening(self, prompt: str = '') -> None:
-        '''Start background listening thread'''
+    def start_listening(self, prompt: str = '', names: list[str] | None = None) -> None:
+        '''Start background listening thread
+
+        Args:
+            prompt: context passed to Whisper to help it transcribe (eg the names of the NPCs in the conversation)
+            names: the names of the characters in the conversation, used to correct misheard names for models that cannot be prompted
+        '''
         if self._running:
             return
             
         self._running = True
         self._reset_state()
         self.prompt = prompt
+        self._names_to_correct = names or []
         
         # Start audio stream
-        from sounddevice import InputStream
-        self._stream = InputStream(
-            samplerate=self.SAMPLING_RATE,
-            channels=1,
-            blocksize=self.CHUNK_SIZE,
-            dtype=np.float32,
-            callback=self._create_input_callback(self._audio_queue),
-            latency = 'low'
-        )
-        self._stream.start()
+        try:
+            from sounddevice import InputStream
+            self._stream = InputStream(
+                samplerate=self.SAMPLING_RATE,
+                channels=1,
+                blocksize=self.CHUNK_SIZE,
+                dtype=np.float32,
+                callback=self._create_input_callback(self._audio_queue),
+                latency = 'low'
+            )
+            self._stream.start()
+        except Exception:
+            # allow the next attempt to start listening again instead of leaving the transcriber stuck in a "running" state
+            self._running = False
+            self._stream = None
+            raise
         
         # Start processing thread
         self._processing_thread = threading.Thread(
@@ -369,7 +567,8 @@ If you would prefer to run speech-to-text locally, please ensure the `Speech-to-
                     if self.__processing_audio_error_count % self.__warning_frequency == 0:
                         logger.log(23, f"STT WARNING: Processing audio error: {status}")
                     self.__processing_audio_error_count += 1
-                    continue
+                    # The status only reports that earlier audio was lost (eg an input overflow). The chunk itself is still valid,
+                    # and dropping it would cut even more out of the player's speech
 
                 with self._lock:
                     if self.ptt_enabled:

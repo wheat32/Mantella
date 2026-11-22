@@ -180,3 +180,43 @@
 .custom-footer a:hover {
     text-decoration: underline;
 }
+
+/* Console output below the settings */
+.console-section {
+    margin-top: 16px !important;
+}
+
+.console-header {
+    align-items: center !important;
+}
+
+.mantella-console {
+    height: 320px;
+    overflow-y: auto;
+    resize: vertical;
+    padding: 8px 10px;
+    border: 1px solid var(--border-color-primary);
+    border-radius: var(--radius-lg);
+    background: #111113;
+    color: #d4d4d8;
+    font-family: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
+    font-size: 0.85em;
+    line-height: 1.45;
+}
+
+.mantella-console .console-line {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.mantella-console .console-error {
+    color: #f87171;
+}
+
+.mantella-console .console-warning {
+    color: #facc15;
+}
+
+.mantella-console .console-debug {
+    color: #8b8b94;
+}

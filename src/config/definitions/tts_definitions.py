@@ -1,5 +1,7 @@
 import os
 from enum import Enum, auto
+from typing import Callable
+from urllib.parse import urlparse
 from src.config.types.config_value import ConfigValue, ConfigValueTag
 from src.config.types.config_value_bool import ConfigValueBool
 from src.config.types.config_value_float import ConfigValueFloat
@@ -43,12 +45,25 @@ If you have trouble installing the xVASynth version from Nexus, try installing i
         return ConfigValueSelection("tts_service", "TTS Service", "The TTS service used by Mantella.", TTSEnum.PIPER.display_name, options, list(TTSEnum))
 
     @staticmethod
-    def get_xvasynth_folder_config_value() -> ConfigValue:
-        return ConfigValuePath("xvasynth_folder", "xVASynth Folder", "The folder you have xVASynth downloaded to (the folder that contains xVASynth.exe).", "C:\\Games\\Steam\\steamapps\\common\\xVASynth","xVASynth.exe",[TTSDefinitions.ResourceFolderExistsChecker()])
+    def is_xtts_folder_required(tts_service: str, xtts_url: str) -> bool:
+        """The XTTS folder is only needed to start the XTTS server, which only happens if XTTS is selected and set to run on this machine"""
+        if str(tts_service).strip().lower() != TTSEnum.XTTS.display_name.lower():
+            return False
+        url = str(xtts_url).strip()
+        hostname = urlparse(url if '//' in url else f'//{url}').hostname or ''
+        return hostname in ('localhost', '::1') or hostname.startswith('127.')
+
+    @staticmethod
+    def is_xvasynth_folder_required(tts_service: str) -> bool:
+        return str(tts_service).strip().lower() == TTSEnum.XVASYNTH.display_name.lower()
+
+    @staticmethod
+    def get_xvasynth_folder_config_value(is_required: Callable[[], bool] | None = None) -> ConfigValue:
+        return ConfigValuePath("xvasynth_folder", "xVASynth Folder", "The folder you have xVASynth downloaded to (the folder that contains xVASynth.exe).\nOnly needed if the TTS Service is set to xVASynth.", "C:\\Games\\Steam\\steamapps\\common\\xVASynth","xVASynth.exe",[TTSDefinitions.ResourceFolderExistsChecker()], is_required=is_required)
     
     @staticmethod
-    def get_xtts_folder_config_value() -> ConfigValue:
-        return ConfigValuePath("xtts_server_folder", "XTTS Folder", "The folder you have the XTTS server downloaded to (the folder that contains xtts-api-server-mantella.exe).", "C:\\Games\\Steam\\steamapps\\common\\XTTS","xtts-api-server-mantella.exe")
+    def get_xtts_folder_config_value(is_required: Callable[[], bool] | None = None) -> ConfigValue:
+        return ConfigValuePath("xtts_server_folder", "XTTS Folder", "The folder you have the XTTS server downloaded to (the folder that contains xtts-api-server-mantella.exe).\nOnly needed if the TTS Service is set to XTTS and the XTTS URL points to this machine.", "C:\\Games\\Steam\\steamapps\\common\\XTTS","xtts-api-server-mantella.exe", is_required=is_required)
     
     @staticmethod
     def get_piper_folder_config_value(is_hidden: bool = False) -> ConfigValue:

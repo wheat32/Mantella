@@ -14,6 +14,7 @@ from src.characters_manager import Characters
 from src.character_manager import Character, get_genders_text, get_races_text, get_genders_and_races_text
 from src.remember.remembering import Remembering
 from src import utils
+from src.wine import to_host_path
 
 logger = utils.get_logger()
 
@@ -29,6 +30,9 @@ class Summaries(Remembering):
     """ Stores a conversation as a summary in a text file.
         Loads the latest summary from disk for a prompt text.
     """
+    MAX_SUMMARY_ATTEMPTS = 3
+    SUMMARY_RETRY_DELAY = 5 # seconds
+
     def __init__(self, game: Gameable, config: ConfigLoader, client: LLMClient, language_name: str, summary_client: SummaryLLMClient | None = None, summary_limit_pct: float = 0.3) -> None:
         super().__init__()
         self.loglevel = 28
@@ -253,8 +257,9 @@ class Summaries(Remembering):
             if not txt_files:
                 return 1
                 
-            file_numbers = [int(os.path.splitext(f)[0].split('_')[-1]) for f in txt_files]
-            return max(file_numbers)
+            # ignore text files that are not summaries (eg backup copies)
+            file_numbers = [int(number) for number in (os.path.splitext(f)[0].split('_')[-1] for f in txt_files) if number.isdigit()]
+            return max(file_numbers) if file_numbers else 1
         
         # Check folders in priority order
         name_ref_path = get_folder_path(name_ref)
@@ -298,22 +303,23 @@ class Summaries(Remembering):
                     races=races,
                     genders_and_races=genders_and_races
                 )
-        while True:
+        if len(npc_info.messages) < min_messages:
+            logger.info(f"Conversation summary not saved. Not enough dialogue spoken.")
+            return ""
+
+        for attempt in range(1, self.MAX_SUMMARY_ATTEMPTS + 1):
             try:
-                if len(npc_info.messages) >= min_messages:
-                    summary = self.summarize_conversation(npc_info.messages.transform_to_dict_representation(npc_info.messages.get_talk_only()), prompt)
-                    # Prepend timestamp to summary if available
-                    if summary and end_timestamp is not None and self.__config.memory_prompt_datetime_prefix:
-                        timestamp_prefix = self.__format_timestamp(end_timestamp)
-                        summary = f"{timestamp_prefix}\n{summary}"
-                    return summary
-                else:
-                    logger.info(f"Conversation summary not saved. Not enough dialogue spoken.")
-                break
-            except Exception:
-                logger.error('Failed to summarize conversation. Retrying...')
-                time.sleep(5)
-                continue
+                summary = self.summarize_conversation(npc_info.messages.transform_to_dict_representation(npc_info.messages.get_talk_only()), prompt)
+                # Prepend timestamp to summary if available
+                if summary and end_timestamp is not None and self.__config.memory_prompt_datetime_prefix:
+                    timestamp_prefix = self.__format_timestamp(end_timestamp)
+                    summary = f"{timestamp_prefix}\n{summary}"
+                return summary
+            except Exception as e:
+                logger.error(f'Failed to summarize conversation (attempt {attempt} of {self.MAX_SUMMARY_ATTEMPTS}): {e}')
+                if attempt < self.MAX_SUMMARY_ATTEMPTS:
+                    time.sleep(self.SUMMARY_RETRY_DELAY)
+        logger.error('Conversation could not be summarized, so it will not be added to the NPC\'s memory. The full conversation is still available in the conversation log')
         return ""
 
     @utils.time_it
@@ -329,7 +335,7 @@ class Summaries(Remembering):
             previous_conversation_summaries = ''
        
         if len(new_summary) > 0:
-            logger.info(f"Saving conversation summary for {npc_name} to: {conversation_summary_file}")
+            logger.info(f"Saving conversation summary for {npc_name} to: {to_host_path(conversation_summary_file)}")
 
             conversation_summaries = previous_conversation_summaries + new_summary
             with open(conversation_summary_file, 'w', encoding='utf-8') as f:
@@ -343,7 +349,8 @@ class Summaries(Remembering):
         # if summaries token limit is reached, summarize the summaries
         if count_tokens_summaries > summary_limit:
             logger.info(f'Token limit of conversation summaries reached ({count_tokens_summaries} / {summary_limit} tokens). Creating new summary file...')
-            while True:
+            long_conversation_summary = ''
+            for attempt in range(1, self.MAX_SUMMARY_ATTEMPTS + 1):
                 try:
                     prompt = self.__resummarize_prompt.format(
                         name=npc_name,
@@ -355,10 +362,15 @@ class Summaries(Remembering):
                     )
                     long_conversation_summary = self.summarize_conversation(conversation_summaries, prompt)
                     break
-                except Exception:
-                    logger.error('Failed to summarize conversation. Retrying...')
-                    time.sleep(5)
-                    continue
+                except Exception as e:
+                    logger.error(f'Failed to condense conversation summaries (attempt {attempt} of {self.MAX_SUMMARY_ATTEMPTS}): {e}')
+                    if attempt < self.MAX_SUMMARY_ATTEMPTS:
+                        time.sleep(self.SUMMARY_RETRY_DELAY)
+
+            if not long_conversation_summary.strip():
+                # Starting a new (empty) summary file would hide all of the NPC's existing memories
+                logger.error(f"Could not condense the memories of {npc_name}. The existing memories are kept as they are and condensing will be tried again after the next conversation")
+                return
 
             # Split the file path and increment the number by 1
             base_directory, filename = os.path.split(conversation_summary_file)

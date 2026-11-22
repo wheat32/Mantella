@@ -145,7 +145,7 @@ class Conversation:
         # restart mic listening as soon as NPC's first sentence is processed
         if self.__interruption_enabled() and not self.__stt.is_listening:
             mic_prompt = self.__get_mic_prompt()
-            self.__stt.start_listening(mic_prompt)
+            self.__stt.start_listening(mic_prompt, self.__get_npc_names())
         
         #Grab the next sentence from the queue
         next_sentence: Sentence | None = self.retrieve_sentence_from_queue()
@@ -252,7 +252,7 @@ class Conversation:
                     self.__output_manager.clear_listen_requested()
                 
                 if not self.__stt.is_listening and self.__allow_mic_input:
-                    self.__stt.start_listening(self.__get_mic_prompt())
+                    self.__stt.start_listening(self.__get_mic_prompt(), self.__get_npc_names())
                 
                 # Use timeout if timeout is enabled, max count is not reached, and Listen mode is not active
                 use_silence_timeout = (self.__silence_auto_response_enabled and 
@@ -317,6 +317,10 @@ class Conversation:
         mic_prompt = f"This is a conversation with {self.__context.get_character_names_as_text(False)} in {self.__context.location}."
         #logger.log(23, f'Context for mic transcription: {mic_prompt}')
         return mic_prompt
+
+    def __get_npc_names(self) -> list[str]:
+        """The names of the NPCs in the conversation, used to correct names misheard by the speech-to-text model"""
+        return [npc.name for npc in self.__context.npcs_in_conversation.get_non_player_characters()]
     
     @utils.time_it
     def __get_player_voiceline(self, player_character: Character | None, player_text: str) -> Sentence | None:
@@ -486,6 +490,12 @@ class Conversation:
         self.__has_already_ended = True
         self.__stop_generation()
         self.__sentences.clear()
+        # Stop the mic so that nothing said after the conversation is picked up as input for the next one
+        if self.__stt and self.__stt.is_listening:
+            try:
+                self.__stt.stop_listening()
+            except Exception as e:
+                logger.warning(f'Could not stop listening for mic input: {e}')
         self.__save_conversation(is_reload=False, end_timestamp=end_timestamp)
     
     @utils.time_it
