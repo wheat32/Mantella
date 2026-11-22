@@ -31,11 +31,68 @@ jobs:
       - name: Run tests
         run: pytest --tb=short -q -m "not requires_audio and not requires_external_exe and not requires_llm"
 
+  skse:
+    name: Build SKSE Plugins (Windows)
+    # The four .dll files the mod needs, built from the sources in skse/ (see skse/README.md).
+    # The mod archive is still built if this job fails; it then does not contain the plugins.
+    runs-on: windows-latest
+    continue-on-error: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up the MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Cache vcpkg packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}\vcpkg-binary-cache
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('skse/vcpkg.json') }}
+          restore-keys: |
+            vcpkg-${{ runner.os }}-
+
+      - name: Configure
+        shell: pwsh
+        env:
+          VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg-binary-cache
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\vcpkg-binary-cache" | Out-Null
+          # CommonLibSSE-NG is built from source: without GITHUB_ACTIONS it does not look for a prebuilt bundle.
+          Remove-Item Env:GITHUB_ACTIONS -ErrorAction SilentlyContinue
+          $vcpkg = if ($env:VCPKG_ROOT) { $env:VCPKG_ROOT } else { $env:VCPKG_INSTALLATION_ROOT }
+          cmake -S skse -B build/skse -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_TOOLCHAIN_FILE="$vcpkg/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows-static-md `
+            -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL
+
+      - name: Build
+        shell: pwsh
+        env:
+          VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg-binary-cache
+        run: cmake --build build/skse
+
+      - name: Confirm the plugins exist
+        shell: bash
+        run: |
+          ls build/skse/plugins/MantellaDialogue.dll build/skse/plugins/MantellaLauncher.dll
+          ls build/skse/plugins/MantellaSubtitles.dll build/skse/plugins/SKSE_HTTP.dll
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: skse-plugins
+          path: build/skse/plugins/*.dll
+
   build:
     name: Build Mod Archive (Windows)
     # Mantella.exe is a Windows program (it runs under Proton on Linux), so it is built on Windows.
     runs-on: windows-latest
-    needs: test
+    needs: [test, skse]
 
     steps:
       - name: Checkout
@@ -51,6 +108,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -r packaging/requirements-build.txt
+
+      - name: Download SKSE plugins
+        # Missing if the SKSE plugin build failed: the archive is then built without them.
+        uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: skse-plugins
+          path: dist/skse
 
       - name: Build mod archive
         run: python packaging/build_mod_archive.py
@@ -96,7 +161,7 @@ jobs:
 
             **Commit message:** ${{ github.event.head_commit.message }}
 
-            > Replaces the [Mantella mod](https://www.nexusmods.com/skyrimspecialedition/mods/98631) from Nexus Mods. **Not included:** the Piper voice models and the SKSE plugins (`.dll` files). See the [installation steps](https://github.com/${{ github.repository }}/blob/main/README.md#installation) for where to get them.
+            > Replaces the [Mantella mod](https://www.nexusmods.com/skyrimspecialedition/mods/98631) from Nexus Mods. **Not included:** the Piper voice models. See the [installation steps](https://github.com/${{ github.repository }}/blob/main/README.md#installation) for where to get them.
 
             ## Downloads
 
@@ -107,7 +172,7 @@ jobs:
             ## Installation
 
             1. Install `Mantella-Skyrim-${{ steps.tag.outputs.VERSION }}.zip` with your mod manager ("Install a new mod from an archive" in Mod Organizer 2).
-            2. Add the Piper voice models and the SKSE plugins as described in the [README](https://github.com/${{ github.repository }}/blob/main/README.md#installation).
+            2. Add the Piper voice models as described in the [README](https://github.com/${{ github.repository }}/blob/main/README.md#installation).
             3. Paste your LLM secret key into `GPT_SECRET_KEY.txt` in the installed mod's folder.
             4. Disable the Mantella mod from Nexus Mods.
 

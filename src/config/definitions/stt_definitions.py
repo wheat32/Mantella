@@ -61,9 +61,9 @@ class STTDefinitions:
     @staticmethod
     def get_instant_interruption_config_value() -> ConfigValue:
         description = """How the game is told that you have interrupted an NPC (see `Allow Interruption`).
-                        Disabled (default): works with every version of the Mantella mod. The NPC stops generating their response as soon as you start speaking (or press the push-to-talk key), and their current voiceline is cut off once they start to respond to you.
-                        Enabled: the NPC's voiceline is cut off the moment you start speaking. This requires Mantella mod scripts and SKSE plugins newer than Mantella v0.14. With older versions of the mod, enabling this setting will cause conversations to freeze when you interrupt an NPC."""
-        return ConfigValueBool("instant_interruption", "Instant Interruption", description, False, tags=[ConfigValueTag.advanced])
+                        Enabled (default): with push-to-talk, the NPC stops talking the moment you press the key. With an open mic, their voiceline is cut off as soon as your speech has been transcribed and they start to respond. This needs the mod scripts and SKSE plugins that come with this version of Mantella.
+                        Disabled: for use with the scripts of Mantella v0.14 and older, which do not know about interruptions and would freeze the conversation. The NPC stops generating their response as soon as you start speaking, and their current voiceline is cut off once they start to respond to you."""
+        return ConfigValueBool("instant_interruption", "Instant Interruption", description, True, tags=[ConfigValueTag.advanced])
 
     @staticmethod
     def get_stt_name_correction_config_value() -> ConfigValue:

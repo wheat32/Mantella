@@ -44,6 +44,7 @@ bool microphoneEnabledLastKnownStatus = false
 Actor[] _cachedNearbyActors = None
 bool _waitingForActionResponse = true
 int _actionResponseTimeout = 0
+bool _playerInputPending = false
 
 event OnInit()
     RegisterForConversationEvents()
@@ -178,6 +179,11 @@ function ContinueConversation(string nextAction, int handle)
         RequestContinueConversation()
     elseIf(nextAction == mConsts.KEY_REPLYTYPE_NPCTALK)
         ; Debug.Trace((Utility.GetCurrentRealTime() - httpReceivedTime) + " seconds to realise NPC needs to respond", 2)
+        If (_playerInputPending)
+            ; A new response is starting after player input: make sure nothing from the previous response is still playing
+            _playerInputPending = false
+            StopCurrentVoiceline()
+        EndIf
         int npcTalkHandle = SKSE_HTTP.getNestedDictionary(handle, mConsts.KEY_REPLYTYPE_NPCTALK)
         ; Debug.Trace((Utility.GetCurrentRealTime() - httpReceivedTime) + " seconds to get NPC talk handle", 2)
         ProcessNpcSpeak(npcTalkHandle)
@@ -193,6 +199,17 @@ function ContinueConversation(string nextAction, int handle)
         ClearRepeatingMessage()
         string transcribe = SKSE_HTTP.getString(handle, mConsts.KEY_TRANSCRIBE, "*Complete gibberish*")
         sendRequestForPlayerInput(transcribe, updateContext=True)
+    elseIf (nextAction == mConsts.KEY_REPLYTYPE_INTERRUPTED)
+        ; The player talked over the current line: follow up with a player input request.
+        ; The current voiceline is not stopped here. Instead, it is cut just before the new response 
+        ; starts to minimise the silence gap (and latency perception) between the old and new voiceline.
+        ClearRepeatingMessage()
+        ; With push-to-talk the interruption is deliberate (a key press, not noise picked up by an open mic),
+        ; in which case Mantella asks for the NPC to stop talking straight away
+        If (SKSE_HTTP.getBool(handle, "mantella_stop_voiceline", false))
+            StopCurrentVoiceline()
+        EndIf
+        sendRequestForPlayerInput("", updateContext=False)
     elseIf(nextAction == mConsts.KEY_REPLYTYPE_NPCACTION)
         int npcActionHandle = SKSE_HTTP.getNestedDictionary(handle, mConsts.KEY_REPLYTYPE_NPCACTION)
         ProcessNpcAction(npcActionHandle)
@@ -208,9 +225,11 @@ function RequestContinueConversation(bool updateInGameEvents = false)
         int handle = SKSE_HTTP.createDictionary()
         SKSE_HTTP.setString(handle, mConsts.KEY_REQUESTTYPE, mConsts.KEY_REQUESTTYPE_CONTINUECONVERSATION)
 
-        int nextTopicInfo = GetNextTopicID()
-        SKSE_HTTP.setInt(handle, mConsts.KEY_CONTINUECONVERSATION_TOPICINFOFILE, nextTopicInfo)
-        _lastTopicInfo = nextTopicInfo
+        ; _lastTopicInfo is only updated once a voiceline actually plays (see ProcessNpcSpeak)
+        ; If this request does not result in a voiceline (eg the reply is "playertalk"),
+        ; the same topic ID is re-sent on the next request instead of being skipped,
+        ; keeping the alternation in sync with what was last heard in-game
+        SKSE_HTTP.setInt(handle, mConsts.KEY_CONTINUECONVERSATION_TOPICINFOFILE, GetNextTopicID())
 
         if(_extraRequestActions && _extraRequestActions.Length > 0)
             ;Debug.Notification("_extraRequestActions contains items. Sending them along with continue!")
@@ -311,6 +330,11 @@ function ProcessNpcSpeak(int handle)
             endif
             _lastNpcToSpeak = speaker
             _lastSpeakerName = speakerName
+            ; Track the topic of the last voiceline actually played so that GetNextTopicID()
+            ; always alternates relative to the last audible line
+            ; Playing the same topic twice in a row can cause the engine to replay the
+            ; previous (cached) voiceline instead of the newly written audio file
+            _lastTopicInfo = topicID
         endIf
     endIf
     ; Get actions only after the NPC starts speaking to improve response times
@@ -460,6 +484,7 @@ Function CleanupConversation()
     _lastNpcToSpeak = None
     _lastTopicInfo = 0
     _cachedNearbyActors = None
+    _playerInputPending = false
     ;SKSE_HTTP.clearAllDictionaries()
     If (MantellaConversationParticipantsQuest.IsRunning())
         MantellaConversationParticipantsQuest.Stop()
@@ -489,9 +514,13 @@ endEvent
 
 function sendRequestForPlayerInput(string playerInput, bool updateContext)
     if(!_hasBeenStopped)
+        _playerInputPending = true
         int handle = SKSE_HTTP.createDictionary()
         SKSE_HTTP.setString(handle, mConsts.KEY_REQUESTTYPE, mConsts.KEY_REQUESTTYPE_PLAYERINPUT)
         SKSE_HTTP.setString(handle, mConsts.KEY_REQUESTTYPE_PLAYERINPUT, playerinput)
+        ; Send the topic to use in case the player's input is voiced
+        ; (without this the server falls back to topic 1, which can break the topic alternation)
+        SKSE_HTTP.setInt(handle, mConsts.KEY_CONTINUECONVERSATION_TOPICINFOFILE, GetNextTopicID())
 
         if repository.targetTrackingAngerState ; only the anger state of the NPCs is updated by UpdateNpcsInConversationArray()
             UpdateNpcsInConversationArray()
@@ -583,6 +612,16 @@ function WaitForNpcToFinishSpeaking(Actor speaker, Actor lastNpcToSpeak)
         WaitForSpecificNpcToFinishSpeaking(speaker)
     endIf
 endFunction
+
+Function StopCurrentVoiceline()
+    If (_lastNpcToSpeak != None)
+        SKSE_HTTP.StopVoiceLine(_lastNpcToSpeak)
+        ; RemoveSpell fires OnEffectFinish -> SetIsTalking(false), 
+        ; but is set here too so the clear is immediate
+        _lastNpcToSpeak.RemoveSpell(MantellaIsTalkingSpell)
+        _isTalking = false
+    EndIf
+EndFunction
 
 function WaitForSpecificNpcToFinishSpeaking(Actor selectedNpc)
     float waitTime = 0.01

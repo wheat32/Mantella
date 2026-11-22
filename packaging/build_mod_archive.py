@@ -25,6 +25,8 @@ BUILD_FOLDER = PROJECT_ROOT / 'build'
 SOFTWARE_FOLDER_IN_MOD = Path('SKSE') / 'Plugins' / 'MantellaSoftware'
 
 MOD_FOLDER = PROJECT_ROOT / 'mod'
+SKSE_PLUGINS_FOLDER = DIST_FOLDER / 'skse'
+SKSE_PLUGINS = ['MantellaDialogue.dll', 'MantellaLauncher.dll', 'MantellaSubtitles.dll', 'SKSE_HTTP.dll']
 THIRD_PARTY_FOLDER = PROJECT_ROOT / 'third_party'
 
 # Files and folders that Mantella expects next to Mantella.exe, relative to the project root
@@ -76,6 +78,14 @@ def create_archive(software_folder: Path, archive_path: Path) -> int:
     with zipfile.ZipFile(archive_path, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
         # The game plugin, scripts and voice files, laid out like the game's Data folder
         file_count = add_folder(archive, MOD_FOLDER, Path('.'), exclude=MOD_FILES_NOT_PACKAGED)
+        # The SKSE plugins, if they have been built (see skse/README.md)
+        plugins = sorted(SKSE_PLUGINS_FOLDER.glob('*.dll')) if SKSE_PLUGINS_FOLDER.is_dir() else []
+        for plugin in plugins:
+            archive.write(plugin, (Path('SKSE') / 'Plugins' / plugin.name).as_posix())
+        file_count += len(plugins)
+        missing = sorted(set(SKSE_PLUGINS) - {plugin.name for plugin in plugins})
+        if missing:
+            print(f'Note: the archive does not contain these SKSE plugins, as they were not found in {SKSE_PLUGINS_FOLDER}: {", ".join(missing)}')
         # An empty placeholder for the user's secret key. A key file is never taken from disk
         archive.writestr('GPT_SECRET_KEY.txt', '')
         file_count += 1

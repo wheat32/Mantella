@@ -147,7 +147,10 @@ class GameStateManager:
                 # the game follows up with a player input request, which goes through player_input() normally
                 # (setting __first_line = True) so the streamed first line is correctly muted in-game
                 if self.__config.instant_interruption:
-                    return {comm_consts.KEY_REPLYTYPE: comm_consts.KEY_REPLYTYPE_INTERRUPTED}
+                    # With push-to-talk the interruption is a deliberate key press, so the game is asked to cut the NPC off right away.
+                    # With an open mic the line is only cut once the new response starts, as the "speech" may turn out to be noise
+                    stop_voiceline_now = self.__stt is not None and self.__stt.ptt_enabled
+                    return {comm_consts.KEY_REPLYTYPE: comm_consts.KEY_REPLYTYPE_INTERRUPTED, comm_consts.KEY_INTERRUPTED_STOP_VOICELINE: stop_voiceline_now}
                 # Versions of the mod up to v0.14 do not know the "interrupted" reply and would stop responding.
                 # Instead, the player's input is processed as part of this request: the reply is the same as that of a player input
                 # request, after which the game carries on with the new response (which cuts the interrupted voiceline off in-game)
