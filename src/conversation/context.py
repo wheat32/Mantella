@@ -227,12 +227,24 @@ class Context:
         elif npcs_nearby:
             # Sort by distance and list names (nearest to furthest)
             sorted_npcs = sorted(npcs_nearby, key=lambda x: float(x.get('distance', 0)))
-            nearby_names = [npc['name'] for npc in sorted_npcs if 'name' in npc]
+            seen_names = [npc['name'] for npc in sorted_npcs if 'name' in npc and not npc.get('heard_only', False)]
+            heard_names = [npc['name'] for npc in sorted_npcs if 'name' in npc and npc.get('heard_only', False)]
+            # the same name is tracked separately for seen and heard, so that coming into view is reported as a change
+            nearby_names = seen_names + [f'{name} (heard)' for name in heard_names]
             # Only add event if the set of nearby NPCs has changed (not just order)
             if nearby_names and set(nearby_names) != set(self.__prev_nearby_npc_names):
-                self.__vision_hints = "Characters nearby (from nearest to furthest): " + ", ".join(nearby_names)
+                descriptions = []
+                if seen_names:
+                    descriptions.append("Other characters currently in sight (from nearest to furthest): " + ", ".join(seen_names))
+                if heard_names:
+                    descriptions.append("Can be heard nearby, but not seen: " + ", ".join(heard_names))
+                self.__vision_hints = ". ".join(descriptions)
                 self.__ingame_events.append(self.__vision_hints)
                 self.__prev_nearby_npc_names = nearby_names
+        elif npcs_nearby is not None and self.__prev_nearby_npc_names:
+            # Tell the LLM when the characters it was told about are gone, or it keeps talking about them
+            self.__ingame_events.append("No other characters can be seen or heard anymore.")
+            self.__prev_nearby_npc_names = []
 
         if custom_ingame_events:
             self.__ingame_events.extend(custom_ingame_events)

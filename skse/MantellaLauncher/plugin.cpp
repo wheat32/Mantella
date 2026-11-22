@@ -184,7 +184,8 @@ bool LaunchMantellaExe() {
 
     const wchar_t* params = L"--integrated";
 
-    std::wstring commandLine = exePath + L" " + params;
+    // The path is quoted, as it contains spaces ("Skyrim Special Edition")
+    std::wstring commandLine = L"\"" + exePath + L"\" " + params;
 
     std::vector<HANDLE> currentMantellaProcesses = LocateExistingMantellaProcesses();
     // Check if Mantella.exe is already running and if yes, close all of them
@@ -199,7 +200,7 @@ bool LaunchMantellaExe() {
                        << GetLastError();
                     RE::ConsoleLog::GetSingleton()->Print(ss.str().c_str());
                 }
-                WaitForSingleObject(currentMantellaProcess, INFINITE);  // Ensure the process is completely terminated
+                WaitForSingleObject(currentMantellaProcess, 5000);  // Give the process time to end, without freezing the game if it does not
                 RE::ConsoleLog::GetSingleton()->Print("Existing Mantella.exe process terminated.");
             } else {
                 // Process is not active, close the handle
@@ -209,7 +210,7 @@ bool LaunchMantellaExe() {
     }
 
     // Start Mantella.exe
-    if (!CreateProcess(NULL, &commandLine[0], NULL, NULL, FALSE, CREATE_NEW_CONSOLE, NULL, moduleDir.c_str(), &si,
+    if (!CreateProcess(exePath.c_str(), &commandLine[0], NULL, NULL, FALSE, CREATE_NEW_CONSOLE, NULL, moduleDir.c_str(), &si,
                        &pi)) {
         std::stringstream ss;
         ss << "Failed to launch Mantella.exe. CreateProcess error: " << GetLastError();

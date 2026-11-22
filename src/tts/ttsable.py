@@ -66,6 +66,10 @@ class TTSable(ABC):
         self._session.mount('http://', retry_adapter)
         self._session.mount('https://', retry_adapter)
 
+    def shutdown(self):
+        """Releases what the TTS service holds on to (eg a process it started). Called when the service is replaced, eg after a settings change"""
+        self.stop_external_playback()
+
     @utils.time_it
     def stop_external_playback(self):
         """Stops any externally-played voiceline audio (streamed or fallback) currently playing"""

@@ -26,20 +26,16 @@ FetchContent_Declare(commonlibsse_ng
 FetchContent_MakeAvailable(commonlibsse_ng)
 include(${commonlibsse_ng_SOURCE_DIR}/cmake/CommonLibSSE.cmake)
 
-# HTTP client used by SKSE_HTTP
-set(BUILD_STATIC_CURL ON)
-set(BUILD_STATIC_LIBS ON)
-FetchContent_Declare(cpr
-    GIT_REPOSITORY https://github.com/libcpr/cpr.git
-    GIT_TAG 3b15fa82ea74739b574d705fea44959b58142eb8)
-FetchContent_MakeAvailable(cpr)
+# HTTP client and JSON library used by SKSE_HTTP (from vcpkg, see vcpkg.json)
+find_package(cpr CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 
 function(add_mantella_plugin TARGET FOLDER)
     list(TRANSFORM ARGN PREPEND "${FOLDER}/" OUTPUT_VARIABLE plugin_sources)
     add_commonlibsse_plugin(${TARGET} SOURCES ${plugin_sources})
     target_compile_features(${TARGET} PRIVATE cxx_std_23)
-    target_compile_definitions(${TARGET} PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+    # UNICODE: the plugins call the wide-character versions of the Windows API (as CommonLibSSE-NG's own builds do)
+    target_compile_definitions(${TARGET} PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)
     target_include_directories(${TARGET} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/${FOLDER}")
     target_precompile_headers(${TARGET} PRIVATE "${FOLDER}/PCH.h")
     # All plugins end up in one folder: <build folder>/plugins

@@ -336,9 +336,11 @@ class ChatManager:
                 active_client = self._get_per_character_client(active_character) if not is_multi_npc else self.__client
 
                 while not has_text_response and retries < max_retries:
+                    response_stream = None
                     try:
                         start_time = time.time()
-                        async for item in active_client.streaming_call(messages=messages, is_multi_npc=is_multi_npc, tools=current_tools):
+                        response_stream = active_client.streaming_call(messages=messages, is_multi_npc=is_multi_npc, tools=current_tools)
+                        async for item in response_stream:
                             if self.__stop_generation.is_set():
                                 break
                             if not item:
@@ -485,7 +487,14 @@ class ChatManager:
                     except Exception as e:
                         retries += 1
                         utils.play_error_sound()
-                        logger.error(f"LLM API Error: {e}")
+                        logger.error(f"Error while generating the response: {e}")
+                        # The interrupted response still holds the client's generation lock.
+                        # It has to be closed before trying again, or the retry would wait for that lock forever
+                        if response_stream is not None:
+                            try:
+                                await response_stream.aclose()
+                            except Exception as close_error:
+                                logger.debug(f"Could not close the interrupted response: {close_error}")
                         
                         error_response = "I can't find the right words at the moment."
                         new_sentence = self.generate_sentence(SentenceContent(active_character, error_response, SentenceTypeEnum.SPEECH, True))

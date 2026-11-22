@@ -4,22 +4,27 @@
 #
 # Needed on this machine:
 #   - wine with wine-mono (the compiler is a .NET program), git, bsdtar or unrar, python3 or uv
-#   - the Creation Kit (free on Steam): provides the compiler and the game's own script sources
+#   - "Skyrim Special Edition: Creation Kit" (free on Steam): provides the compiler and the game's own script sources.
+#     It installs into the Skyrim Special Edition folder
 #   - Skyrim Special Edition with SKSE64 installed, including its script sources (Data/Scripts/Source)
 #   - the UIExtensions mod (its archive contains the script sources Mantella calls)
+# The SkyUI script sources are fetched from https://github.com/doodlum/SkyUI-Community.
 #
-# Paths can be set through environment variables (defaults in brackets):
-#   CREATION_KIT_DIR  folder that contains "Papyrus Compiler" and Data/Scripts.rar or Data/Scripts.zip
-#   SKYRIM_DIR        Skyrim Special Edition folder (for the SKSE64 script sources)
+# Paths can be set through environment variables:
+#   STEAM_COMMON_DIR  Steam's steamapps/common folder (default: ~/.local/share/Steam/steamapps/common)
+#   SKYRIM_DIR        Skyrim Special Edition folder (default: "Skyrim Special Edition" in STEAM_COMMON_DIR)
+#   CREATION_KIT_DIR  folder that contains "Papyrus Compiler" and Data/Scripts.zip (default: SKYRIM_DIR)
 #   UIEXTENSIONS_BSA  path to UIExtensions.bsa
+#   SKYUI_REF         branch, tag or commit of SkyUI-Community to compile against (default: main)
 #
 # Usage: packaging/compile_scripts.sh [script names without extension ...]   (default: all scripts)
 set -euo pipefail
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 steam_common="${STEAM_COMMON_DIR:-$HOME/.local/share/Steam/steamapps/common}"
-ck_dir="${CREATION_KIT_DIR:-$steam_common/skyrim}"
 skyrim_dir="${SKYRIM_DIR:-$steam_common/Skyrim Special Edition}"
+ck_dir="${CREATION_KIT_DIR:-$skyrim_dir}"
+skyui_ref="${SKYUI_REF:-main}"
 uiextensions_bsa="${UIEXTENSIONS_BSA:-}"
 
 deps="$repo/build/papyrus"        # downloaded / extracted dependencies (not committed)
@@ -34,28 +39,33 @@ command -v wine >/dev/null || fail "wine is not installed."
 
 mkdir -p "$deps"
 
-# 1. The game's own script sources, from the Creation Kit
-if [[ ! -d "$deps/vanilla/Scripts/Source" ]]; then
-    echo "Extracting the game's script sources from the Creation Kit..."
-    mkdir -p "$deps/vanilla"
-    if [[ -f "$ck_dir/Data/Scripts.zip" ]]; then
-        (cd "$deps/vanilla" && bsdtar -xf "$ck_dir/Data/Scripts.zip")
-    elif [[ -f "$ck_dir/Data/Scripts.rar" ]]; then
-        (cd "$deps/vanilla" && { bsdtar -xf "$ck_dir/Data/Scripts.rar" 2>/dev/null || unrar x -inul "$ck_dir/Data/Scripts.rar"; })
-    else
-        fail "Neither Data/Scripts.zip nor Data/Scripts.rar found in '$ck_dir'."
-    fi
+# 1. The game's own script sources, from the Creation Kit (extracted again if a different Creation Kit is used)
+if [[ -f "$ck_dir/Data/Scripts.zip" ]]; then
+    scripts_archive="$ck_dir/Data/Scripts.zip"
+elif [[ -f "$ck_dir/Data/Scripts.rar" ]]; then
+    scripts_archive="$ck_dir/Data/Scripts.rar"
+else
+    fail "Neither Data/Scripts.zip nor Data/Scripts.rar found in '$ck_dir'. Install the Creation Kit or set CREATION_KIT_DIR."
 fi
-vanilla_sources="$(find "$deps/vanilla" -type d -ipath '*scripts/source' -o -type d -ipath '*source/scripts' | head -n 1)"
+if [[ "$(cat "$deps/vanilla/.source" 2>/dev/null || true)" != "$scripts_archive" ]]; then
+    echo "Extracting the game's script sources from $scripts_archive..."
+    rm -rf "$deps/vanilla" && mkdir -p "$deps/vanilla"
+    (cd "$deps/vanilla" && { bsdtar -xf "$scripts_archive" 2>/dev/null || unrar x -inul "$scripts_archive"; })
+    printf '%s' "$scripts_archive" > "$deps/vanilla/.source"
+fi
+vanilla_sources="$(find "$deps/vanilla" -type d \( -ipath '*scripts/source' -o -ipath '*source/scripts' \) | head -n 1)"
 [[ -n "$vanilla_sources" ]] || fail "Could not find the extracted script sources in '$deps/vanilla'."
 
-# 2. SkyUI script sources (for the mod configuration menu), plus declarations of the functions SkyUI SE added since
-if [[ ! -d "$deps/skyui" ]]; then
+# 2. SkyUI script sources (for the mod configuration menu)
+if [[ ! -d "$deps/skyui-community/.git" ]]; then
     echo "Fetching the SkyUI script sources..."
-    git clone --quiet --depth 1 https://github.com/schlangster/skyui.git "$deps/skyui"
+    git clone --quiet https://github.com/doodlum/SkyUI-Community.git "$deps/skyui-community"
 fi
-mkdir -p "$deps/skyui_se"
-cat "$deps/skyui/dist/Data/Scripts/Source/SKI_ConfigBase.psc" "$repo/packaging/papyrus/SKI_ConfigBase_SE_additions.psc" > "$deps/skyui_se/SKI_ConfigBase.psc"
+git -C "$deps/skyui-community" fetch --quiet origin
+git -C "$deps/skyui-community" -c advice.detachedHead=false checkout --quiet "origin/$skyui_ref" 2>/dev/null \
+    || git -C "$deps/skyui-community" -c advice.detachedHead=false checkout --quiet "$skyui_ref"
+skyui_sources="$deps/skyui-community/source/scripts"
+[[ -f "$skyui_sources/SKI_ConfigBase.psc" ]] || fail "SKI_ConfigBase.psc not found in '$skyui_sources'."
 
 # 3. UIExtensions script sources, from the archive of the installed mod
 if [[ ! -f "$deps/uiextensions/uiextensions.psc" ]]; then
@@ -71,7 +81,7 @@ fi
 # 4. Compile
 to_wine_path() { printf 'Z:%s' "${1//\//\\}"; }
 export WINEPREFIX="${WINEPREFIX:-$deps/wineprefix}" WINEDEBUG="${WINEDEBUG:--all}"
-imports="$(to_wine_path "$source_dir");$(to_wine_path "$skyrim_dir/Data/Scripts/Source");$(to_wine_path "$deps/skyui_se");$(to_wine_path "$deps/skyui/dist/Data/Scripts/Source");$(to_wine_path "$deps/uiextensions");$(to_wine_path "$vanilla_sources")"
+imports="$(to_wine_path "$source_dir");$(to_wine_path "$skyrim_dir/Data/Scripts/Source");$(to_wine_path "$skyui_sources");$(to_wine_path "$deps/uiextensions");$(to_wine_path "$vanilla_sources")"
 compiled="$deps/out"
 rm -rf "$compiled" && mkdir -p "$compiled"
 log="$deps/compile.log"

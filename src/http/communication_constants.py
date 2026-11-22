@@ -24,6 +24,7 @@ class communication_constants:
 
     KEY_STARTCONVERSATION_WORLDID: str = PREFIX + "worldid"
     KEY_STARTCONVERSATION_USENARRATOR: str = PREFIX + "use_narrator"
+    KEY_STARTCONVERSATION_PLAYERSPEAKSFIRST: str = PREFIX + "player_speaks_first"
     KEY_ENDCONVERSATION_TIMESTAMP: str = PREFIX + "end_timestamp"
     KEY_CONTINUECONVERSATION_TOPICINFOFILE: str = PREFIX + "topicinfofile"
     KEY_INPUTTYPE: str = PREFIX + "input_type"
