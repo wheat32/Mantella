@@ -1,5 +1,6 @@
 from src.config.config_loader import ConfigLoader
 from src.tts.ttsable import TTSable
+from src.tts.piper_voices import PiperVoiceStore
 import subprocess
 import os
 import time
@@ -39,6 +40,12 @@ class Piper(TTSable):
         self.__game: Gameable = game
         self.__piper_path = Path(config.piper_path)
         self.__models_path = self.__piper_path / 'models' / self.__game.game_name_in_filepath / 'low' # TODO: change /low parts of the path to dynamic variables
+        # Voices that are not part of the installation are downloaded (Skyrim only) to a folder that survives updates of the mod
+        download_url = config.piper_voices_url if (config.piper_voice_download and self.__game.game_name_in_filepath == 'skyrim') else None
+        self.__voices = PiperVoiceStore(
+            bundled_folder=self.__models_path,
+            download_folder=Path(config.save_folder) / 'data' / 'piper_voices' / self.__game.game_name_in_filepath / 'low',
+            base_url=download_url)
         self.__selected_voice = None
         self.__waiting_for_voice_load = False
         self._current_actor_gender = None
@@ -48,19 +55,24 @@ class Piper(TTSable):
         self._check_if_piper_is_running()
 
         self.__available_models = self.get_available_models(self.__models_path)
+        if not self.__available_models:
+            utils.play_error_sound()
+            logger.error(f'No Piper voices were found in "{self.__models_path}", and none could be downloaded. NPCs will not be able to speak. Check your internet connection, or copy the voice models (.onnx and .onnx.json files) into that folder.')
+        self.__voices.download_missing_in_background()
 
+
+    def __get_model_path(self, voice: str | None) -> Path:
+        """The path of a voice's model. The voice is downloaded first if it is not on this machine yet"""
+        model_path = self.__voices.get_model_path(voice) if voice else None
+        if model_path is None:
+            logger.error(f"The voice '{voice}' is not available: it was not found in \"{self.__models_path}\" and could not be downloaded")
+            return self.__models_path / f'{voice}.onnx'
+        return model_path
 
     @utils.time_it
     def get_available_models(self, folder_path):
-        try:
-            models = [f.replace('.onnx','') for f in os.listdir(folder_path) if f.endswith('.onnx')]
-            return models
-        except FileNotFoundError:
-            utils.play_error_sound()
-            raise FileNotFoundError
-        except PermissionError:
-            utils.play_error_sound()
-            raise PermissionError
+        """The names of the voices that are in the given folder, have been downloaded or can be downloaded"""
+        return self.__voices.get_available_voices()
 
     
     def __write_to_stdin(self, text):
@@ -169,7 +181,7 @@ class Piper(TTSable):
                 self._restart_piper()
 
             if self.__selected_voice:
-                model_path = self.__models_path / f'{self.__selected_voice}.onnx'
+                model_path = self.__get_model_path(self.__selected_voice)
                 self.__write_to_stdin(f"load_model {model_path}\n")
                 self.__waiting_for_voice_load = True
 
@@ -209,7 +221,7 @@ class Piper(TTSable):
             logger.log(self._loglevel, 'Loading voice model...')
 
             self.__selected_voice = self._select_voice_type(voice, in_game_voice, csv_in_game_voice, advanced_voice_model, self._current_actor_gender, self._current_actor_race)
-            model_path = self.__models_path / f'{self.__selected_voice}.onnx'
+            model_path = self.__get_model_path(self.__selected_voice)
 
             self.__write_to_stdin(f"load_model {model_path}\n")
             self.__waiting_for_voice_load = True
@@ -249,6 +261,7 @@ class Piper(TTSable):
     def shutdown(self):
         """Stops the Piper process. Without this, every change of settings would leave another piper.exe running"""
         super().shutdown()
+        self.__voices.stop_background_download()
         self.stop_thread = True
         process = getattr(self, 'process', None)
         if not process:

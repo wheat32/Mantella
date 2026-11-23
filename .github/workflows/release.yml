@@ -156,7 +156,7 @@ jobs:
 
             **Commit message:** ${{ github.event.head_commit.message }}
 
-            > Replaces the [Mantella mod](https://www.nexusmods.com/skyrimspecialedition/mods/98631) from Nexus Mods. **Not included:** the Piper voice models. See the [installation steps](https://github.com/${{ github.repository }}/blob/main/README.md#installation) for where to get them.
+            > Replaces the [Mantella mod](https://www.nexusmods.com/skyrimspecialedition/mods/98631) from Nexus Mods. The Piper voices are not in the archive: Mantella downloads them by itself the first time they are needed.
 
             ## Downloads
 
@@ -167,9 +167,8 @@ jobs:
             ## Installation
 
             1. Install `Mantella-Skyrim-${{ steps.tag.outputs.VERSION }}.zip` with your mod manager ("Install a new mod from an archive" in Mod Organizer 2).
-            2. Add the Piper voice models as described in the [README](https://github.com/${{ github.repository }}/blob/main/README.md#installation).
-            3. Paste your LLM secret key into `GPT_SECRET_KEY.txt` in the installed mod's folder.
-            4. Disable the Mantella mod from Nexus Mods.
+            2. Paste your LLM secret key into `GPT_SECRET_KEY.txt` in the installed mod's folder.
+            3. Disable the Mantella mod from Nexus Mods.
 
             > This is a community build, a fork of [Mantella](https://github.com/art-from-the-machine/Mantella) with fixes for Skyrim and for Linux (Proton). See the [README](https://github.com/${{ github.repository }}/blob/main/README.md) for what is different.
           files: |
