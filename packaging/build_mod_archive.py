@@ -35,8 +35,9 @@ RUNTIME_FILES = ['data', 'src/ui/style.css', 'Mantella.ico', 'version.json', 'LI
 THIRD_PARTY_RUNTIME = ['piper', 'moonshine']
 # Parts of mod/ that are only needed for development
 MOD_FILES_NOT_PACKAGED = ('Spriggit_data',)
-# Libraries that have to be part of the PyInstaller build (folders in dist/Mantella/_internal)
-REQUIRED_IN_BUILD = ['onnxruntime', 'gradio', 'numpy', 'ctranslate2', 'faster_whisper', 'openai', 'anthropic', 'cv2', 'moonshine_onnx']
+# Libraries that have to be part of the PyInstaller build, as folders in dist/Mantella/_internal. Only libraries that come with
+# binaries or data files have a folder there (pure Python ones are inside Mantella.exe), the rest is covered by --smoke-test
+REQUIRED_IN_BUILD = ['onnxruntime', 'gradio', 'numpy', 'ctranslate2', 'faster_whisper', 'cv2', 'moonshine_onnx']
 # Files that must never end up in an archive, wherever they are found
 NEVER_PACKAGED = ('GPT_SECRET_KEY.txt', 'secret_keys.json', 'meta.ini', 'config.ini', 'logging.log')
 
