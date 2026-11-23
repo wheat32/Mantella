@@ -1,3 +1,5 @@
 # Needed to build Mantella.exe (see packaging/build_mod_archive.py)
-pyinstaller==6.11.1
+# 6.12 or newer is required: older versions compare fully resolved paths to find the modules inside the executable,
+# which fails when Mantella.exe runs from a virtual folder (Mod Organizer 2): "No module named 'importlib._abc'"
+pyinstaller==6.22.3
 pyinstaller-hooks-contrib

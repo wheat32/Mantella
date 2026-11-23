@@ -13,6 +13,9 @@
 # and lld (lld-link). Without lld, the linker that comes with Rust (rust-lld) is used.
 #
 # Usage: packaging/build_skse_plugins.sh        -> dist/skse/*.dll (picked up by packaging/build_mod_archive.py)
+#
+# SKSE_EXTRA_CXX_FLAGS adds compiler flags, eg SKSE_EXTRA_CXX_FLAGS=/DMANTELLA_CAPTURE_OUTPUT for a launcher that writes
+# the output of Mantella.exe to MantellaExe.log (for finding out why Mantella.exe does not start). Do not release such a build.
 set -euo pipefail
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -93,7 +96,7 @@ cmake -S "$repo/skse" -B "$build_dir" -G Ninja \
     -DVCPKG_OVERLAY_PORTS="$cross/custom-ports" \
     -DXWIN_SYSROOT="$XWIN_SYSROOT" \
     -DFETCHCONTENT_SOURCE_DIR_COMMONLIBSSE_NG="$commonlib" \
-    -DCMAKE_CXX_FLAGS="/permissive- /bigobj /clang:-ffile-prefix-map=$repo=. -Wno-overloaded-virtual -Wno-delete-non-abstract-non-virtual-dtor -Wno-inconsistent-missing-override -Wno-reinterpret-base-class -Wno-nonportable-include-path -Wno-deprecated-copy-with-user-provided-copy -Wno-invalid-offsetof -Wno-switch -Wno-unused-command-line-argument -Wno-deprecated-volatile -Wno-unused-private-field"
+    -DCMAKE_CXX_FLAGS="/permissive- /bigobj ${SKSE_EXTRA_CXX_FLAGS:-} /clang:-ffile-prefix-map=$repo=. -Wno-overloaded-virtual -Wno-delete-non-abstract-non-virtual-dtor -Wno-inconsistent-missing-override -Wno-reinterpret-base-class -Wno-nonportable-include-path -Wno-deprecated-copy-with-user-provided-copy -Wno-invalid-offsetof -Wno-switch -Wno-unused-command-line-argument -Wno-deprecated-volatile -Wno-unused-private-field"
 
 echo "== Building..."
 cmake --build "$build_dir"
