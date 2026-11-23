@@ -9,7 +9,7 @@ from src.ui.settings_ui_constructor import SettingsUIConstructor
 from src.ui.log_buffer import get_log_buffer
 from src.ui.memory_editor import MemoryEditor
 from src.ui import process_control
-from src.wine import to_host_path, open_url_on_host
+from src.wine import to_host_path
 from src.config.definitions.tts_definitions import TTSDefinitions
 from src.setup import MantellaSetup
 from src.config.definitions.game_definitions import GameEnum
@@ -193,7 +193,7 @@ class StartUI(routeable):
         logger.log(24, f'\nMantella settings can be changed via this link:')
         logger.log(25, link)
         if self._config.auto_launch_ui == True and not process_control.was_restarted_from_ui():
-            if not open_url_on_host(link) and not webbrowser.open(link, new=2):
+            if not webbrowser.open(link, new=2):
                 logger.warning('\nFailed to open Mantella settings UI automatically. To edit settings, see here:')
                 logger.log(25, link)
     

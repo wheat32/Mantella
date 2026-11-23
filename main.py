@@ -15,7 +15,7 @@ def main():
         # Used by the build to check that the executable contains everything it needs: getting here means that all of
         # the imports above could be loaded. Libraries that are only imported when they are first used are loaded here
         import importlib
-        lazily_imported = ['anthropic', 'cv2', 'gradio', 'mss', 'sounddevice', 'soundfile', 'tiktoken_ext.openai_public', 'silero_vad_lite']
+        lazily_imported = ['anthropic', 'cv2', 'gradio', 'matplotlib', 'matplotlib.pyplot', 'mss', 'sounddevice', 'soundfile', 'tiktoken_ext.openai_public', 'silero_vad_lite']
         if getattr(sys, 'frozen', False):
             lazily_imported += ['moonshine_onnx', 'win32gui'] # part of every build of the executable
         missing = []
