@@ -55,17 +55,14 @@ For general documentation on Mantella (requirements, settings, troubleshooting),
 
 The releases of this fork replace the Mantella mod from Nexus Mods: the archive contains the game plugin, scripts, the SKSE plugins (built for Skyrim 1.7.99 and newer), the Mantella software, the Piper text-to-speech program and the Moonshine speech-to-text model.
 
-Not included are the **Piper voice models** (4 GB). These are part of the [Mantella](https://www.nexusmods.com/skyrimspecialedition/mods/98631) download on Nexus Mods.
+The **Piper voices** (4 GB) are not in the archive. Mantella downloads them by itself from [mantella-voices](https://github.com/wheat32/mantella-voices): the voice of an NPC the first time it is needed (about 63 MB), and the others in the background. They are saved to `My Games/Mantella/data/piper_voices`, so updating the mod does not remove them. This can be turned off under `Text-to-Speech` -> `Download Piper Voices`; voices you place in `SKSE/Plugins/MantellaSoftware/piper/models/skyrim/low` yourself are used as they are.
 
 Steps (Mod Organizer 2):
 
 1. Install the requirements of Mantella: [SKSE64](https://www.nexusmods.com/skyrimspecialedition/mods/30379), [Address Library for SKSE Plugins](https://www.nexusmods.com/skyrimspecialedition/mods/32444), [SkyUI](https://www.nexusmods.com/skyrimspecialedition/mods/12604), [UIExtensions](https://www.nexusmods.com/skyrimspecialedition/mods/17561) and the FonixData file.
 2. Download `Mantella-Skyrim-<version>.zip` from the [latest release](../../releases/latest) and install it ("Install a new mod from an archive").
-3. Voices: create an empty mod (eg "Mantella Voices") and copy the folder `SKSE/Plugins/MantellaSoftware/piper/models` from the Mantella download on Nexus Mods into it, keeping that folder structure.
-4. Paste your LLM secret key into `GPT_SECRET_KEY.txt` in the installed mod's folder.
-5. Disable the Mantella mod from Nexus Mods, and the Mantella 1.7.104 SKSE Plugin Fix if you use it. Neither is needed anymore.
-
-If the release notes say that the archive was built without the SKSE plugins, keep using the plugins you have (on Skyrim 1.7.99 and newer: the [Mantella 1.7.104 SKSE Plugin Fix](https://www.nexusmods.com/skyrimspecialedition/mods/195872)).
+3. Paste your LLM secret key into `GPT_SECRET_KEY.txt` in the installed mod's folder. When updating, choose **Merge** rather than **Replace** in Mod Organizer 2 to keep this file.
+4. Disable the Mantella mod from Nexus Mods, and the Mantella 1.7.104 SKSE Plugin Fix if you use it. Neither is needed anymore.
 
 # Development
 
@@ -122,6 +119,7 @@ This builds the branch you are on (it has to be pushed) and downloads `Mantella-
 On a Windows machine, the archive can be built locally:
 
 ```bash
+set PIP_BUILD_CONSTRAINT=packaging/build-constraints.txt
 pip install -r requirements.txt -r packaging/requirements-build.txt
 python packaging/build_mod_archive.py
 ```

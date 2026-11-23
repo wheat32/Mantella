@@ -210,6 +210,8 @@ class ConfigLoader:
             elif self.tts_service == TTSEnum.PIPER:
                 validate_piper_path = True
 
+            self.piper_voice_download = self.__definitions.get_bool_value("piper_voice_download")
+            self.piper_voices_url = self.__definitions.get_string_value("piper_voices_url")
             self.xtts_server_path = self.__definitions.get_string_value("xtts_server_folder", validate_xtts_path)
             self.xvasynth_path = self.__definitions.get_string_value("xvasynth_folder", validate_xvasynth_path)
             if not self.is_run_integrated: # assign Piper path from config if not running integrated

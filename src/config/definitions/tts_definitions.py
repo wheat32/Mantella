@@ -76,6 +76,18 @@ If you have trouble installing the xVASynth version from Nexus, try installing i
         return ConfigValueString("piper_folder", "Piper Folder", "The folder where Piper is installed (where piper.exe exists).", "", is_hidden=is_hidden)
 
     @staticmethod
+    def get_piper_voice_download_config_value() -> ConfigValue:
+        description = """Download Piper voices automatically (Skyrim only).
+                        The voices are not part of the Mantella mod itself. With this setting enabled, the voice of an NPC is downloaded the first time it is needed (about 63 MB), and all other voices are downloaded in the background (4 GB in total), to My Games/Mantella/data/piper_voices.
+                        Voices that are already in the Piper folder (piper/models) are used as they are and not downloaded again."""
+        return ConfigValueBool("piper_voice_download", "Download Piper Voices", description, True)
+
+    @staticmethod
+    def get_piper_voices_url_config_value() -> ConfigValue:
+        description = """Where Piper voices are downloaded from. The address has to contain a manifest.json that lists the voice files."""
+        return ConfigValueString("piper_voices_url", "Piper Voices URL", description, "https://github.com/wheat32/mantella-voices/releases/download/skyrim-v1", tags=[ConfigValueTag.advanced])
+
+    @staticmethod
     def get_lipgen_folder_config_value(is_hidden: bool = False) -> ConfigValue:
         #Note(Leidtier): Because this is a Frankenparameter, I just set it to be a string. It SHOULD be a path, but this would require a different handling of the default empty state
         description = """The LipGenerator program is required by Bethesda games to accurately lip sync voicelines.
