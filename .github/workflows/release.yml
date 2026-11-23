@@ -99,6 +99,11 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
+        # bash stops at the first command that fails. (PowerShell carries on, which once let a failed install
+        # through and produced a Mantella.exe without its libraries.)
+        shell: bash
+        env:
+          PIP_BUILD_CONSTRAINT: packaging/build-constraints.txt
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
@@ -114,6 +119,11 @@ jobs:
 
       - name: Build mod archive
         run: python packaging/build_mod_archive.py
+
+      - name: Check that Mantella.exe starts
+        # Loads every library Mantella uses and exits. Fails if one of them is missing from the build.
+        shell: bash
+        run: dist/Mantella/Mantella.exe --smoke-test
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7

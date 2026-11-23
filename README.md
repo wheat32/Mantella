@@ -119,6 +119,7 @@ This builds the branch you are on (it has to be pushed) and downloads `Mantella-
 On a Windows machine, the archive can be built locally:
 
 ```bash
+set PIP_BUILD_CONSTRAINT=packaging/build-constraints.txt
 pip install -r requirements.txt -r packaging/requirements-build.txt
 python packaging/build_mod_archive.py
 ```
