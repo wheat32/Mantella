@@ -20,7 +20,6 @@ For general documentation on Mantella (requirements, settings, troubleshooting),
 - **Black screen captures are skipped** (Vision), so that NPCs do not comment on a "black screen".
 - **Vision works in Skyrim under Proton**: with `Vision` -> `Use Game Screenshots` enabled, the game takes the screenshot itself (Mantella presses the Print Screen key and reads the file the game saves), instead of Mantella trying to capture the game window from the outside.
 - **Linux paths.** Paths in the log and the web UI are shown as they are on your system (eg `/home/you/...` and not `C:\users\steamuser\...`), and path settings accept Linux paths.
-- **The settings page opens in your own browser** when Mantella starts (it is handed to the desktop's default browser instead of looking for one inside the Wine prefix).
 
 ## Conversations
 - NPCs stay in character when your input is unclear, and no longer talk about microphones or speech recognition.

@@ -38,7 +38,8 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['pytest', 'matplotlib', 'IPython'],
+    # matplotlib must not be excluded: gradio imports it when it handles events of the settings page
+    excludes=['pytest', 'IPython'],
     noarchive=False,
     # gradio reads the source code of its own components at runtime, so it has to be bundled as .py files
     module_collection_mode={'gradio': 'py'},

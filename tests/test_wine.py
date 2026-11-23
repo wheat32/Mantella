@@ -55,3 +55,9 @@ def test_only_absolute_host_paths_are_converted(monkeypatch):
     # no conversion is attempted (and so no Windows API is needed) for paths that are already Windows paths
     assert wine.to_windows_path("C:\\Games\\Piper") == "C:\\Games\\Piper"
     assert wine.to_windows_path("") == ""
+
+
+def test_same_windows_path():
+    assert wine._is_same_windows_path("Z:\\mnt\\games\\Skyrim\\data", "z:/mnt/games/Skyrim/Data\\")
+    # a path in a mod manager's virtual folder converts to somewhere else (eg its overwrite folder)
+    assert not wine._is_same_windows_path("Z:\\mnt\\mo2\\overwrite\\SKSE", "Z:\\mnt\\games\\Skyrim\\data\\SKSE")

@@ -68,15 +68,28 @@ def to_host_path(path: str) -> str:
         convert = kernel32.wine_get_unix_file_name
         convert.argtypes = [ctypes.c_wchar_p]
         convert.restype = ctypes.c_void_p
-        pointer = convert(os.path.abspath(path))
+        absolute_path = os.path.abspath(path)
+        pointer = convert(absolute_path)
         if not pointer:
             return path
         try:
-            return ctypes.string_at(pointer).decode('utf-8', errors='replace') or path
+            host_path = ctypes.string_at(pointer).decode('utf-8', errors='replace')
         finally:
             _free_wine_string(kernel32, pointer)
+        # Paths inside a mod manager's virtual folders (eg the game's Data folder under Mod Organizer 2) have no single place
+        # on the host: the conversion ends up somewhere else, such as the manager's overwrite folder. Converting the
+        # result back shows whether that happened, in which case the Windows path is the more truthful one to display
+        if not host_path or not _is_same_windows_path(to_windows_path(host_path), absolute_path):
+            return path
+        return host_path
     except Exception:
         return path
+
+
+def _is_same_windows_path(first: str, second: str) -> bool:
+    def normalize(windows_path: str) -> str:
+        return os.path.normcase(os.path.normpath(windows_path)).replace('/', '\\').rstrip('\\').lower()
+    return normalize(first) == normalize(second)
 
 
 def to_windows_path(path: str) -> str:
@@ -111,26 +124,3 @@ def _free_wine_string(kernel32, pointer) -> None:
         kernel32.HeapFree(kernel32.GetProcessHeap(), 0, pointer)
     except Exception:
         pass
-
-
-def open_url_on_host(url: str) -> bool:
-    """Opens a URL in the default browser of the host system when running under Wine / Proton, where the regular way of
-    opening a browser (through the Windows shell) often has no browser to hand the URL to
-
-    Returns:
-        bool: whether a command to open the URL could be started (not whether a browser actually opened)
-    """
-    if not is_running_under_wine():
-        return False
-    import subprocess
-    # `start /unix` runs a program of the host system. Inside the Steam runtime, xdg-open forwards the URL to the desktop
-    for opener in ('/usr/bin/xdg-open', '/run/host/usr/bin/xdg-open'):
-        if not os.path.exists(to_windows_path(opener)):
-            continue
-        try:
-            subprocess.Popen(['cmd', '/c', 'start', '/unix', opener, url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                             creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
-            return True
-        except Exception:
-            continue
-    return False
