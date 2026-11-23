@@ -15,7 +15,7 @@ The sources are copies of the versions above, each under the MIT License of its 
 - `SKSE_HTTP/plugin.cpp`: `GetUInt()` is now called `GetUnsignedInteger()`, and three `#include` lines use the exact file name and forward slashes so that they also resolve when building on Linux.
 - `SKSE_HTTP` takes its HTTP library (cpr) from vcpkg instead of building it as part of the plugin.
 - `SKSE_HTTP/plugin.cpp`: new function `GetNearbyActors`, which returns the actors around the player without the limit of 5 that the mod's alias based scan has.
-- `MantellaLauncher/plugin.cpp`: the path of `Mantella.exe` is quoted when it is started (it contains spaces), and waiting for a previous `Mantella.exe` to close is limited to 5 seconds instead of freezing the game if it does not.
+- `MantellaLauncher/plugin.cpp`: waiting for a previous `Mantella.exe` to close is limited to 5 seconds instead of freezing the game if it does not, and what the launcher does is written to `MantellaLauncher.log`. Building with `MANTELLA_CAPTURE_OUTPUT` defined gives a diagnostic launcher that also writes the output of `Mantella.exe` to `MantellaExe.log`.
 
 CommonLibSSE-NG is licensed under GPL-3.0-or-later, so the compiled plugins, which link it statically, are distributed under the GPL-3.0-or-later as well. The builds do not support Skyrim VR.
 

@@ -171,8 +171,13 @@ bool LaunchMantellaExe() {
     std::wstring skyrimDir = GetTopLevelDirectory();
     std::wstring exePath = moduleDir + L"\\MantellaSoftware\\Mantella.exe";  // Construct the full path to Mantella.exe
 
+    // Everything below is also written to MantellaLauncher.log (Documents/My Games/Skyrim Special Edition/SKSE),
+    // as the in-game console is the only other place a failed launch shows up
+    SKSE::log::info("Launching Mantella.exe: {}", WideStringToString(exePath.c_str()));
+
     if (!SetEnvironmentTempPath()) {
-        return false;  // TODO: Handle error
+        SKSE::log::error("Could not set up the temporary folder for Mantella.exe. Mantella.exe was not started.");
+        return false;
     }
 
     // Convert the full path to a narrow string for printing (optional)
@@ -184,8 +189,9 @@ bool LaunchMantellaExe() {
 
     const wchar_t* params = L"--integrated";
 
-    // The path is quoted, as it contains spaces ("Skyrim Special Edition")
-    std::wstring commandLine = L"\"" + exePath + L"\" " + params;
+    // The path is passed the way upstream does it (unquoted, as the command line only), which is known to work
+    // when the path is a virtual one under Mod Organizer 2
+    std::wstring commandLine = exePath + L" " + params;
 
     std::vector<HANDLE> currentMantellaProcesses = LocateExistingMantellaProcesses();
     // Check if Mantella.exe is already running and if yes, close all of them
@@ -209,15 +215,49 @@ bool LaunchMantellaExe() {
         }
     }
 
+    BOOL inheritHandles = FALSE;
+#ifdef MANTELLA_CAPTURE_OUTPUT
+    // Diagnostic builds only (packaging/build_skse_plugins.sh with SKSE_EXTRA_CXX_FLAGS=/DMANTELLA_CAPTURE_OUTPUT):
+    // what Mantella.exe prints goes to MantellaExe.log next to the SKSE logs instead of its console window,
+    // so that it can still be read if Mantella.exe closes straight away
+    SECURITY_ATTRIBUTES outputAttributes = {sizeof(SECURITY_ATTRIBUTES), NULL, TRUE};
+    HANDLE outputFile = INVALID_HANDLE_VALUE;
+    if (auto logDirectory = SKSE::log::log_directory()) {
+        std::wstring outputPath = (*logDirectory / L"MantellaExe.log").wstring();
+        outputFile = CreateFile(outputPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, &outputAttributes, CREATE_ALWAYS,
+                                FILE_ATTRIBUTE_NORMAL, NULL);
+        if (outputFile != INVALID_HANDLE_VALUE) {
+            si.dwFlags |= STARTF_USESTDHANDLES;
+            si.hStdOutput = outputFile;
+            si.hStdError = outputFile;
+            inheritHandles = TRUE;
+            SKSE::log::info("Output of Mantella.exe is written to {}", WideStringToString(outputPath.c_str()));
+        }
+    }
+#endif
+
     // Start Mantella.exe
-    if (!CreateProcess(exePath.c_str(), &commandLine[0], NULL, NULL, FALSE, CREATE_NEW_CONSOLE, NULL, moduleDir.c_str(), &si,
+    if (!CreateProcess(NULL, &commandLine[0], NULL, NULL, inheritHandles, CREATE_NEW_CONSOLE, NULL, moduleDir.c_str(), &si,
                        &pi)) {
         std::stringstream ss;
         ss << "Failed to launch Mantella.exe. CreateProcess error: " << GetLastError();
         RE::ConsoleLog::GetSingleton()->Print(ss.str().c_str());
+        SKSE::log::error("{}", ss.str());
         return false;
     } else {
         SetConsoleTitle(L"Mantella");
+        SKSE::log::info("Mantella.exe started (process id {})", pi.dwProcessId);
+#ifdef MANTELLA_CAPTURE_OUTPUT
+        // Report it if Mantella.exe does not stay up
+        if (WaitForSingleObject(pi.hProcess, 20000) == WAIT_OBJECT_0) {
+            DWORD exitCode = 0;
+            GetExitCodeProcess(pi.hProcess, &exitCode);
+            SKSE::log::error("Mantella.exe closed again with exit code {} (0x{:X})", exitCode, exitCode);
+        } else {
+            SKSE::log::info("Mantella.exe is still running after 20 seconds");
+        }
+        if (outputFile != INVALID_HANDLE_VALUE) CloseHandle(outputFile);
+#endif
     }
 
     //Close thread handle
@@ -246,6 +286,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
 
     SKSE::GetMessagingInterface()->RegisterListener([](SKSE::MessagingInterface::Message* message) {
         if (message->type == SKSE::MessagingInterface::kDataLoaded) {
+            SKSE::log::info("Game data loaded.");
             //Get running instances of Mantella.exe here. In case there are any, we don't force spawn the integrated one.
             std::vector<HANDLE> existingProcesses = LocateExistingMantellaProcesses();
             if (existingProcesses.size() == 0) {
@@ -257,6 +298,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
                 }
             } else {
                 for (const HANDLE& i : existingProcesses) CloseHandle(i);//close the acquired handles, we will get new ones on a potential restart
+                SKSE::log::info("Found a running Mantella.exe, so no new one was started.");
                 RE::ConsoleLog::GetSingleton()->Print("Found running instance of Mantella.exe. Not starting a new one. You can still restart it from the MCM.");
             }
         }
