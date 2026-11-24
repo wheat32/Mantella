@@ -11,6 +11,8 @@ class communication_constants:
     KEY_REQUESTTYPE_ENDCONVERSATION: str = PREFIX + "end_conversation"
 
     KEY_REPLYTTYPE_INITCOMPLETED: str = PREFIX + "init_completed"
+    KEY_PTT_ENABLED: str = PREFIX + "ptt_enabled"
+    KEY_PTT_KEYCODE: str = PREFIX + "ptt_key_code"
     KEY_REPLYTTYPE_STARTCONVERSATIONCOMPLETED: str = PREFIX + "start_conversation_completed"
 
     KEY_REQUEST_EXTRA_ACTIONS: str = PREFIX + "extra_actions"

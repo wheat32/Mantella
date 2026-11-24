@@ -73,6 +73,40 @@ class TestKnownCharacterSwitch:
         assert rest == " Welcome!"
         assert s.current_speaker.name == "Svana Far-Shield"
 
+    def test_numbered_duplicate_names_are_told_apart(self):
+        """The game numbers characters that share a name: "bandit" must not be taken for "bandit 2"."""
+        def make_npc(name: str, ref_id: str) -> Character:
+            return Character(base_id=ref_id, ref_id=ref_id, name=name, gender_raw=1, race_raw='Nord',
+                             is_player_character=False, bio='', is_in_combat=False, is_enemy=False,
+                             relationship_rank=0, is_generic_npc=True, ingame_voice_model='FemaleEvenToned',
+                             tts_voice_model='FemaleEvenToned', csv_in_game_voice_model='FemaleEvenToned',
+                             advanced_voice_model='FemaleEvenToned', voice_accent='en',
+                             equipment=None, custom_character_values=None, llm_service='', llm_model='', tts_service='')
+        chars = Characters()
+        first, second = make_npc('bandit', '1'), make_npc('bandit 2', '2')
+        chars.add_or_update_character(first)
+        chars.add_or_update_character(second)
+        p = change_character_parser(chars)
+        s = sentence_generation_settings(second)
+
+        result, rest = p.cut_sentence("bandit: Keep your voice down.", s)
+        assert result is None
+        assert rest == " Keep your voice down."
+        assert s.current_speaker is first
+
+        result, rest = p.cut_sentence("bandit 2: Relax.", s)
+        assert rest == " Relax."
+        assert s.current_speaker is second
+
+        result, rest = p.cut_sentence("Bandit: Aye.", s)
+        assert s.current_speaker is first
+
+        # the number is a label for telling the two apart: nobody says it out loud
+        from src.llm.sentence_content import SentenceContent, SentenceTypeEnum
+        spoken = SentenceContent(first, "Relax, bandit 2. Even Bandit 2 knows that, and so do the 2 of us.", SentenceTypeEnum.SPEECH)
+        modified, _ = p.modify_sentence_content(spoken, None, s)
+        assert modified.text == "Relax, bandit. Even Bandit knows that, and so do the 2 of us."
+
 
 class TestUnrecognizedCharacterDiscard:
     """Tests for discarding text when the LLM uses a character name not in the conversation."""

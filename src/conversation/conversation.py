@@ -42,6 +42,7 @@ class Conversation:
         self.__mic_input: bool = mic_input
         self.__mic_ptt: bool = mic_ptt
         self.__allow_interruption: bool = context_for_conversation.config.allow_interruption # allow mic interruption
+        self.__player_speaks_first: bool = False # free-flow conversations: the NPC waits for what the player says instead of greeting them
         self.__is_player_interrupting = False
         self.__interrupted_npc_name: str | None = None
         self.__last_npc_speaker_name: str | None = None
@@ -121,6 +122,7 @@ class Conversation:
         Returns:
             tuple[str, sentence | None]: Returns a tuple consisting of a reply type and an optional sentence
         """
+        self.__player_speaks_first = player_speaks_first
         greeting: UserMessage | None = None if player_speaks_first else self.__conversation_type.get_user_message(self.__context, self.__messages)
         if greeting:
             greeting = self.update_game_events(greeting)
@@ -188,7 +190,10 @@ class Conversation:
                 return comm_consts.KEY_REPLYTYPE_NPCTALK, None
             else:
                 # If not ended, ask the conversation type for an automatic user message. If there is None, signal the game that the player must provide it
-                new_user_message = self.__conversation_type.get_user_message(self.__context, self.__messages)
+                # In a conversation the player started by speaking, nothing has been said yet at this point: the automatic greeting
+                # is left out, so that the NPC listens to the player first
+                awaiting_first_player_input = self.__player_speaks_first and len(self.__messages) == 1
+                new_user_message = None if awaiting_first_player_input else self.__conversation_type.get_user_message(self.__context, self.__messages)
                 if new_user_message:
                     new_user_message = self.update_game_events(new_user_message)
                     self.__messages.add_message(new_user_message)
@@ -211,7 +216,7 @@ class Conversation:
                 and self.__mic_input
                 and self.__allow_interruption
                 # With push-to-talk, pressing the key while an NPC speaks interrupts them. This needs Mantella itself to watch the key
-                # (`Speech-to-Text`->`Push-to-Talk`): if only the game knows about the key, speech cannot be told apart from background noise
+                # (`Push-to-Talk` in the game's mod menu): if only the game knows about the key, speech cannot be told apart from background noise
                 and (not self.__mic_ptt or self.__stt.ptt_enabled)
                 and self.__allow_mic_input
                 and not isinstance(self.__conversation_type, radiant))
@@ -231,7 +236,7 @@ class Conversation:
         self.__interrupted_npc_name = self.__last_npc_speaker_name if (was_npc_speaking or self.__last_npc_speaker_name) else None
         if self.__stt is not None and self.__stt.ptt_enabled:
             # Pressing the push-to-talk key is a deliberate interruption (unlike noise picked up by an open mic),
-            # so audio played by Mantella itself is stopped straight away
+            # so audio played by Mantella itself is stopped right away
             self.__output_manager.stop_external_playback()
         # the interrupted line's estimated duration no longer applies
         self.last_sentence_audio_length = 0
@@ -413,7 +418,7 @@ class Conversation:
 
     def __get_interruption_event(self) -> str:
         """Tells the LLM that the player talked over an NPC, so that the NPC can react to it the way their character would
-        (eg a proud or short-tempered NPC taking offence, a loyal follower not minding at all)"""
+        (eg a proud or short-tempered NPC taking offense, a loyal follower not minding at all)"""
         player = self.__context.npcs_in_conversation.get_player_character()
         player_name = player.name if player else 'The player'
         npc_name = self.__interrupted_npc_name

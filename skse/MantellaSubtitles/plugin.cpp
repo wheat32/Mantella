@@ -5,20 +5,24 @@
 #include "Papyrus.h"
 #include "InjectTopic.h"
 
-
-void InitializeLogging() {
-    auto path = SKSE::log::log_directory();
-    if (!path) {
+void InitializeLogging()
+{
+    std::optional<std::filesystem::path> path = SKSE::log::log_directory();
+    if (path.has_value() == false)
+    {
         SKSE::stl::report_and_fail("Unable to lookup SKSE logs directory.");
     }
     *path /= SKSE::PluginDeclaration::GetSingleton()->GetName();
     *path += L".log";
 
     std::shared_ptr<spdlog::logger> log;
-    if (IsDebuggerPresent()) {
+    if (IsDebuggerPresent() != 0)
+    {
         log = std::make_shared<spdlog::logger>(
             "Global", std::make_shared<spdlog::sinks::msvc_sink_mt>());
-    } else {
+    }
+    else
+    {
         log = std::make_shared<spdlog::logger>(
             "Global", std::make_shared<spdlog::sinks::basic_file_sink_mt>(path->string(), true));
     }
@@ -41,7 +45,7 @@ Oldrim def below for reference.
         void    * unk04;        // 08 - BSTSmartPointer<REFREventCallbacks::IEventCallback>
         RE::FormID  topicInfoID;    // 10
         bool    flag;           // 18
-    
+
         inline bool IsStarting() {
             return !flag;
         }
@@ -51,7 +55,16 @@ Oldrim def below for reference.
     };
 */
 
-class OurEventSink : public RE::BSTEventSink<RE::TESTopicInfoEvent> {
+namespace
+{
+// Position of topicInfoID in RE::TESTopicInfoEvent, counted in pointer-sized slots
+constexpr int TOPIC_INFO_ID_POINTER_SLOT = 2;
+// A negative display time: the subtitle is not removed by a timer
+constexpr int32_t NO_SUBTITLE_TIMEOUT = -1;
+} // namespace
+
+class OurEventSink : public RE::BSTEventSink<RE::TESTopicInfoEvent>
+{
     OurEventSink() = default;
     OurEventSink(const OurEventSink&) = delete;
     OurEventSink(OurEventSink&&) = delete;
@@ -59,55 +72,65 @@ class OurEventSink : public RE::BSTEventSink<RE::TESTopicInfoEvent> {
     OurEventSink& operator=(OurEventSink&&) = delete;
 
 public:
-    static OurEventSink* GetSingleton() {
+    static OurEventSink* GetSingleton()
+    {
         static OurEventSink singleton;
         return &singleton;
     }
 
     RE::BSEventNotifyControl ProcessEvent(const RE::TESTopicInfoEvent* event,
-                                          RE::BSTEventSource<RE::TESTopicInfoEvent>*) {
+                                          RE::BSTEventSource<RE::TESTopicInfoEvent>*)
+    {
         // topicInfoId is the third item in the struct, after two pointers.
         // Unfortunately we have to do it this way because commonlibsse-ng
         // doesn't seem to know the layout of this struct.
-        RE::FormID eventTopicInfoId = *(RE::FormID*)((void**)event + 2 );
+        RE::FormID eventTopicInfoId = *(RE::FormID*)((void**)event + TOPIC_INFO_ID_POINTER_SLOT);
 
         SKSE::log::debug("Received event, topic info ID is {:x}", eventTopicInfoId);
 
-        if (injectSpeaker != NULL && InjectTopicContainsInfoId(eventTopicInfoId)) {
-            MantellaSubtitles::AddSubtitleForSpeaker(injectSpeaker, injectSubtitle, -1);
-        } else {
+        if (injectSpeaker != nullptr && InjectTopicContainsInfoId(eventTopicInfoId))
+        {
+            MantellaSubtitles::AddSubtitleForSpeaker(injectSpeaker, injectSubtitle, NO_SUBTITLE_TIMEOUT);
+        }
+        else
+        {
             SKSE::log::debug("Didn't inject subtitle");
         }
         return RE::BSEventNotifyControl::kContinue;
     }
-
 };
 
-void InitializePapyrus() {
+void InitializePapyrus()
+{
     SKSE::log::debug("Initializing Papyrus binding...");
-    if (SKSE::GetPapyrusInterface()->Register(MantellaSubtitles::RegisterFns)) {
+    if (SKSE::GetPapyrusInterface()->Register(MantellaSubtitles::RegisterFns))
+    {
         SKSE::log::debug("Papyrus functions bound.");
-    } else {
+    }
+    else
+    {
         SKSE::stl::report_and_fail("Failure to register Papyrus bindings.");
     }
 }
 
-void InitializeEventHandlers() {
-    auto* eventSink = OurEventSink::GetSingleton();
+void InitializeEventHandlers()
+{
+    OurEventSink* eventSink = OurEventSink::GetSingleton();
 
     // ScriptSource
-    auto* eventSourceHolder = RE::ScriptEventSourceHolder::GetSingleton();
+    RE::ScriptEventSourceHolder* eventSourceHolder = RE::ScriptEventSourceHolder::GetSingleton();
     eventSourceHolder->AddEventSink<RE::TESTopicInfoEvent>(eventSink);
 
-    //auto* skyrimVmSource = RE::SkyrimVM::GetSingleton();
-    //skyrimVmSource->AddEventSink<RE::TESTopicInfoEvent>(eventSink);
+    // auto* skyrimVmSource = RE::SkyrimVM::GetSingleton();
+    // skyrimVmSource->AddEventSink<RE::TESTopicInfoEvent>(eventSink);
 }
 
-SKSEPluginLoad(const SKSE::LoadInterface *skse) {
+SKSEPluginLoad(const SKSE::LoadInterface* skse)
+{
     InitializeLogging();
 
-    auto* plugin = SKSE::PluginDeclaration::GetSingleton();
-    auto version = plugin->GetVersion();
+    const SKSE::PluginDeclaration* plugin = SKSE::PluginDeclaration::GetSingleton();
+    REL::Version version = plugin->GetVersion();
     SKSE::log::info("{} {} is loading...", plugin->GetName(), version);
 
     SKSE::Init(skse);
@@ -117,7 +140,7 @@ SKSEPluginLoad(const SKSE::LoadInterface *skse) {
 
     // Once all plugins and mods are loaded, then the ~ console is ready and can
     // be printed to
-    //SKSE::GetMessagingInterface()->RegisterListener([](SKSE::MessagingInterface::Message *message) {
+    // SKSE::GetMessagingInterface()->RegisterListener([](SKSE::MessagingInterface::Message *message) {
     //    if (message->type == SKSE::MessagingInterface::kDataLoaded) {
     //        RE::ConsoleLog::GetSingleton()->Print("Hello, world!");
     //  }

@@ -240,7 +240,7 @@ class TTSable(ABC):
 
     @utils.time_it
     def _stream_play_and_save(self, url: str, request_data: dict, headers: dict | None, final_voiceline_file: str) -> bool:
-        """Streams a voiceline from the TTS server, playing the audio externally as it arrives and saving the complete wav afterwards
+        """Streams a voiceline from the TTS server, playing the audio externally as it arrives and saving the complete wav afterward
 
         Args:
             url (str): the streaming endpoint to POST to

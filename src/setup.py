@@ -9,7 +9,7 @@ import sys
 from src.config.config_loader import ConfigLoader
 from src.telemetry.telemetry import get_telemetry_manager
 from src.actions.function_manager import FunctionManager
-from src.ui.log_buffer import get_log_buffer, get_console_log_file
+from src.ui.log_buffer import get_log_buffer, get_console_log_file, ConsoleLogFile
 from src.wine import to_host_path
 
 class MantellaSetup:
@@ -61,7 +61,9 @@ Conversation histories, config.ini, and logging.log available in:
         logger = utils.get_logger()
         console_log_file = get_console_log_file()
         was_saving = console_log_file.file_path is not None
-        file_path = console_log_file.apply_setting(getattr(config, 'save_console_logs', False) is True, config.save_folder, logger)
+        file_path = console_log_file.apply_setting(
+            getattr(config, 'save_console_logs', False) is True, config.save_folder, logger,
+            getattr(config, 'console_log_max_size', ConsoleLogFile.DEFAULT_MAX_SIZE_MB), getattr(config, 'console_log_max_files', ConsoleLogFile.DEFAULT_MAX_FILES))
         if file_path and not was_saving:
             logger.log(23, f'Console logs of this run are saved to: {to_host_path(file_path)}')
 

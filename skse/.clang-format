@@ -1,0 +1,21 @@
+# Code style of the SKSE plugins: Allman braces, braces around every body, four spaces, lines are not rewrapped.
+# Third-party files (json.h, ini.h, ini.c) are not formatted.
+BasedOnStyle: LLVM
+BreakBeforeBraces: Allman
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 0
+PointerAlignment: Left
+IndentCaseLabels: true
+InsertBraces: true
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: None
+AllowShortBlocksOnASingleLine: Never
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortLambdasOnASingleLine: Empty
+SortIncludes: Never
+NamespaceIndentation: None
+AccessModifierOffset: -4
+MaxEmptyLinesToKeep: 1

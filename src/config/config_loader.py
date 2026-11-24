@@ -351,6 +351,8 @@ LLM parameter list must be valid JSON""")
 
             self.advanced_logs = self.__definitions.get_bool_value("advanced_logs")
             self.save_console_logs = self.__definitions.get_bool_value("save_console_logs")
+            self.console_log_max_size = self.__definitions.get_int_value("console_log_max_size")
+            self.console_log_max_files = self.__definitions.get_int_value("console_log_max_files")
 
             self.save_audio_data_to_character_folder = self.__definitions.get_bool_value("save_audio_data_to_character_folder")
 
@@ -382,6 +384,7 @@ LLM parameter list must be valid JSON""")
             self.resize_method = self.__definitions.get_string_value("resize_method")
             self.capture_offset = json.loads(self.__definitions.get_string_value("capture_offset"))
             self.use_game_screenshots = self.__definitions.get_bool_value("use_game_screenshots")
+            self.use_frame_capture = self.__definitions.get_bool_value("use_frame_capture")
 
             # Custom Vision Model
             self.custom_vision_model = self.__definitions.get_bool_value("custom_vision_model")

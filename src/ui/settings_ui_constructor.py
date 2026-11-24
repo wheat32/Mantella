@@ -19,6 +19,12 @@ from src.config.types.config_value_group import ConfigValueGroup
 from src.config.types.config_value_int import ConfigValueInt
 from src.config.types.config_value_visitor import ConfigValueVisitor
 from src.ui.profile_ui_handler import ProfileUIHandler
+from src.ui.connection_tests import check_xtts_url
+
+# Settings that get a `Test` button next to them: identifier -> check of the value currently typed in, returning (success, message)
+VALUE_TESTS: dict[str, Callable[[str], tuple[bool, str]]] = {
+    'xtts_url': check_xtts_url,
+}
 
 class SettingUIComponents(NamedTuple):
     input_ui: Any
@@ -115,6 +121,12 @@ class SettingsUIConstructor(ConfigValueVisitor):
         with gr.Row(elem_classes="button-container"):
             for btn_label, btn_action in additional_buttons:
                 gr.Button(btn_label, variant="primary", size='sm').click(btn_action, outputs=input_ui)
+            value_test = VALUE_TESTS.get(config_value.identifier)
+            if value_test:
+                test_button = gr.Button("Test", variant="primary", size='sm')
+                if hasattr(test_button, "_id"):
+                    # The value in the text box is passed in, so that a URL can be tested before it is applied
+                    test_button.click(lambda value: self.__on_test_click(value_test, value), inputs=input_ui, outputs=None)
             if not additional_buttons:
                 reset_button = gr.Button("Default", size='sm')
                 if hasattr(reset_button, "_id"):
@@ -122,6 +134,19 @@ class SettingsUIConstructor(ConfigValueVisitor):
                         lambda: self.__on_reset_click(config_value, create_input_component), 
                         outputs = [input_ui, error_message]
                     )
+
+    @staticmethod
+    def __on_test_click(value_test: Callable[[str], tuple[bool, str]], value: str) -> None:
+        try:
+            is_success, message = value_test(value)
+        except Exception as e:
+            is_success, message = False, f'The test failed: {e}'
+        if is_success:
+            logger.info(message)
+            gr.Info(message)
+        else:
+            logger.warning(message)
+            gr.Warning(message)
 
     def __on_reset_click(self, config_value: ConfigValue, create_input_component: Callable[[ConfigValue], Any]):
         error_message = self.__on_change(config_value, config_value.default_value)

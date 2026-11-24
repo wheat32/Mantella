@@ -3,7 +3,7 @@
 # clang-cl and lld-link compile against the Windows SDK / MSVC runtime files that xwin downloads from Microsoft.
 #
 # The first run sets up everything it needs under build/skse-toolchain (several GB; takes a while):
-#   - xwin (built with cargo) and the Windows SDK + MSVC CRT. Running this script accepts Microsoft's licence
+#   - xwin (built with cargo) and the Windows SDK + MSVC CRT. Running this script accepts Microsoft's license
 #     for these files on your behalf: https://go.microsoft.com/fwlink/?LinkId=2086102
 #   - vcpkg, which builds the libraries the plugins use
 #   - llvm-mingw, to build a small tool that DirectXTK (a dependency of CommonLibSSE-NG) needs under Wine

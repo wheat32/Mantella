@@ -1,3 +1,4 @@
+import re
 from typing import Callable, OrderedDict
 from src.character_manager import Character
 from src.characters_manager import Characters
@@ -15,22 +16,38 @@ class change_character_parser(output_parser):
         super().__init__()
         self.__dict_name_permutations: OrderedDict[str, Character] = OrderedDict() #Dictionary to hold permutations of the name for easy checks. e.g. "Svana Far-Shield" -> ["Svana Far-Shield", "Svana", "Far-Shield"]
         self.__action_keywords: set[str] = set(a.keyword.lower() for a in (actions or []))
+        self.__numbered_name_patterns: list[re.Pattern] = []
+        for actor in characters_in_conversation.get_all_characters():
+            name_without_number = utils.get_name_without_number(actor.name)
+            if name_without_number != actor.name:
+                number = actor.name[len(name_without_number):].strip()
+                self.__numbered_name_patterns.append(re.compile(rf'\b({re.escape(name_without_number)})\s+{re.escape(number)}\b', re.IGNORECASE))
         for actor in characters_in_conversation.get_all_characters():
             if actor.is_player_character:
                 self.__dict_name_permutations["player"] = actor
             self.__dict_name_permutations[actor.name] = actor
         
+        # Parts of a name also identify a character ("Svana" for "Svana Far-Shield"), unless they are the name of another character:
+        # with "bandit" and "bandit 2" in a conversation, "bandit" must keep meaning the first of the two
+        full_names_lower: set[str] = set(name.lower() for name in self.__dict_name_permutations)
         split_names_to_add: OrderedDict[str, Character] = OrderedDict()
-        for name, character in self.__dict_name_permutations.items():
-            split_name = character.name.split()        
+        for character in list(self.__dict_name_permutations.values()):
+            split_name = character.name.split()
             if len(split_name) > 1:
-                for name in split_name:
-                    if not split_names_to_add.__contains__(name):
-                        split_names_to_add[name] = character
-        
+                for name_part in split_name:
+                    if name_part.isdigit(): # the number the game adds to characters that share a name
+                        continue
+                    if name_part.lower() in full_names_lower:
+                        continue
+                    if not split_names_to_add.__contains__(name_part):
+                        split_names_to_add[name_part] = character
+
         for name, character in split_names_to_add.items():
             self.__dict_name_permutations[name] = character
-        
+
+        # Longer names are checked first, so that "bandit 2" is not taken for a character called "2" or "bandit"
+        self.__dict_name_permutations = OrderedDict(sorted(self.__dict_name_permutations.items(), key=lambda item: len(item[0]), reverse=True))
+
 
     def cut_sentence(self, output: str, current_settings: sentence_generation_settings) -> tuple[SentenceContent | None, str]:
         if not ':' in output:
@@ -65,6 +82,9 @@ class change_character_parser(output_parser):
         return None, output #There is a ':' in the text, but it doesn't seem to be part of a character change
 
     def modify_sentence_content(self, cut_content: SentenceContent, last_content: SentenceContent | None, settings: sentence_generation_settings) -> tuple[SentenceContent | None, SentenceContent | None]:
+        # The number of a numbered name ("bandit 2") only tells characters of the same name apart. It is never said out loud
+        for pattern in self.__numbered_name_patterns:
+            cut_content.text = pattern.sub(lambda match: match.group(1), cut_content.text)
         return cut_content, last_content
     
     def get_cut_indicators(self) -> list[str]:

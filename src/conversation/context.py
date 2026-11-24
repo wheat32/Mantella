@@ -472,6 +472,24 @@ class Context:
             return conversation_summaries, 0
         return '\n'.join(line for index, line in enumerate(lines) if index not in lines_to_remove), removed_count
 
+    @staticmethod
+    def get_numbered_names_note(names: list[str]) -> str:
+        """The game tells characters that share a name apart by a number ("bandit", "bandit 2"). Such a name is a label and not
+        what the character is called, which the LLM is told so that no one says "bandit 2" out loud
+
+        Args:
+            names (list[str]): the names of the NPCs in the conversation
+
+        Returns:
+            str: a paragraph to add to the system prompt, empty if no name is numbered
+        """
+        numbered_names = [name for name in names if utils.get_name_without_number(name) != name]
+        if not numbered_names:
+            return ''
+        return ("\n\nSome of the characters share a name and are told apart by a number (" + ', '.join(numbered_names) + "). "
+                "The number is only a label for marking who is speaking. It is not part of anyone's name: characters never say the number, "
+                "and never use these labels as names when talking to or about each other. They speak as people who know each other would.")
+
     @utils.time_it
     def generate_system_message(self, prompt: str, actions_for_prompt: list[Action]) -> str:
         """Fills the variables in the prompt with the values calculated from the context
@@ -538,6 +556,8 @@ class Context:
         max_prompt_tokens = int(round(self.__client.token_limit * self.TOKEN_LIMIT_PERCENT, 0))
         logger.log(23, f'Maximum size of prompt is {self.__client.token_limit} x {self.TOKEN_LIMIT_PERCENT} = {max_prompt_tokens} tokens.')
 
+        numbered_names_note = self.get_numbered_names_note([character.name for character in non_player_chars])
+
         def build_prompt(bios_text: str, summaries_text: str) -> str:
             return prompt.format(
                 player_name = player_name,
@@ -566,7 +586,7 @@ class Context:
                 conversation_summary=summaries_text,
                 conversation_summaries=summaries_text,
                 actions = actions
-                )
+                ) + numbered_names_note
 
         result = build_prompt(bios, conversation_summaries)
         # If the prompt is too long, forget the oldest memories first rather than all of them at once

@@ -6,7 +6,7 @@ import gradio as gr
 from src.config.config_loader import ConfigLoader
 from src.http.routes.routeable import routeable
 from src.ui.settings_ui_constructor import SettingsUIConstructor
-from src.ui.log_buffer import get_log_buffer
+from src.ui.log_buffer import get_log_buffer, get_console_log_file
 from src.ui.memory_editor import MemoryEditor
 from src.ui import process_control
 from src.wine import to_host_path
@@ -50,10 +50,16 @@ class StartUI(routeable):
         return main_block
 
     def __on_setting_changed(self, config_value):
-        """Applies settings that can take effect straight away, without waiting for Mantella's services to be set up again"""
-        if config_value.identifier == "save_console_logs":
-            self._config.save_console_logs = config_value.value
+        """Applies settings that can take effect right away, without waiting for Mantella's services to be set up again"""
+        if config_value.identifier in ("save_console_logs", "console_log_max_size", "console_log_max_files"):
+            setattr(self._config, config_value.identifier, config_value.value)
             MantellaSetup.apply_console_log_setting(self._config)
+
+    def __delete_saved_logs(self) -> str:
+        """Deletes the console logs saved by the `Save Console Logs` setting (not the regular logging.log)"""
+        deleted = get_console_log_file().delete_saved_logs(self._config.save_folder, logger)
+        logs_folder = to_host_path(os.path.join(self._config.save_folder, 'logs'))
+        return f"Deleted {deleted} saved console log file(s) from `{logs_folder}`." if deleted else f"There are no saved console logs in `{logs_folder}`."
 
     def _get_memory_editor(self) -> MemoryEditor:
         game_folder = "Fallout4" if self._config.game.base_game == GameEnum.FALLOUT4 else "Skyrim"
@@ -97,10 +103,12 @@ class StartUI(routeable):
         with gr.Column(elem_classes="console-section"):
             with gr.Row(elem_classes="console-header"):
                 gr.HTML('<h3 style="margin: 0;">Console</h3>')
+                delete_logs_button = gr.Button("Delete Saved Logs", size='sm', scale=0, min_width=160)
                 restart_button = gr.Button("Restart Mantella", size='sm', scale=0, min_width=160)
                 stop_button = gr.Button("Stop Mantella", variant="stop", size='sm', scale=0, min_width=160)
             control_status = gr.Markdown("")
             gr.HTML('<div id="mantella-console" class="mantella-console" role="log" aria-label="Mantella console output"></div>')
+            delete_logs_button.click(self.__delete_saved_logs, None, control_status)
             restart_button.click(process_control.restart_mantella, None, control_status)
             stop_button.click(process_control.stop_mantella, None, control_status)
 

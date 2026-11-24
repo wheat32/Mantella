@@ -11,6 +11,7 @@ function LeftColumn(MantellaMCM mcm, MantellaRepository Repository) global
 	mcm.AddHeaderOption("Debug")
     mcm.oid_restartMantellaExe = mcm.AddTextOption("Restart Mantella.exe", "")
 	mcm.oid_debugNPCselectMode = mcm.AddToggleOption("NPC Debug Select Mode", Repository.NPCdebugSelectModeEnabled)
+    mcm.oid_showScreenshotMessages = mcm.AddToggleOption("Show Screenshot Messages", Repository.showScreenshotMessages)
 endfunction
 
 function RightColumn(MantellaMCM mcm, MantellaRepository Repository) global
@@ -51,7 +52,13 @@ function SliderOptionAccept(MantellaMCM mcm, int optionID, float value, Mantella
 endfunction
 
 function OptionUpdate(MantellaMCM mcm, int optionID, MantellaRepository Repository) global
-	if optionID == mcm.oid_debugNPCselectMode
+	if optionID == mcm.oid_showScreenshotMessages
+		Repository.showScreenshotMessages =! Repository.showScreenshotMessages
+		mcm.SetToggleOptionValue(optionID, Repository.showScreenshotMessages)
+		if (Quest.GetQuest("MantellaConversation") as MantellaConversation).IsRunning()
+			SKSE_HTTP.SetScreenshotMessageVisible(Repository.showScreenshotMessages)
+		endIf
+	elseif optionID == mcm.oid_debugNPCselectMode
 		Repository.NPCdebugSelectModeEnabled =! Repository.NPCdebugSelectModeEnabled
 		mcm.SetToggleOptionValue(mcm.oid_debugNPCselectMode, Repository.NPCdebugSelectModeEnabled)
     elseif optionID == mcm.oid_restartMantellaExe

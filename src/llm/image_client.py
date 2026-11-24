@@ -59,7 +59,8 @@ class ImageClient(ClientBase):
                                                 config.resize_method, 
                                                 config.capture_offset,
                                                 config.use_game_screenshots,
-                                                config.game_path)
+                                                config.game_path,
+                                                config.use_frame_capture)
     
     @utils.time_it
     def add_image_to_messages(self, openai_messages: list[ChatCompletionMessageParam], vision_hints: str) -> list[ChatCompletionMessageParam]:

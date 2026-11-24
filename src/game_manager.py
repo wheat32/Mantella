@@ -17,7 +17,8 @@ from src.character_manager import Character
 import src.utils as utils
 from src import runtime_state
 from src.http.communication_constants import communication_constants as comm_consts
-from src.stt.stt import Transcriber, ListeningCancelled
+from src.stt.ptt_controller import PTTController
+from src.stt.stt import Transcriber, ListeningCanceled
 from src.actions.function_manager import FunctionManager
 from src.random_llm_selector import RandomLLMSelector, LLMSelection
 from src.llm.client_base import ClientBase
@@ -52,7 +53,7 @@ class GameStateManager:
         self.__should_reload: bool = False
         self.__chat_manager.clear_per_character_client_cache()
         self.__random_selector = RandomLLMSelector()
-        if config.ptt_enabled:
+        if PTTController.load_saved_settings(config.save_folder, config.ptt_enabled, config.ptt_hotkey)[0]:
             # With push-to-talk, start recording key presses right away rather than from the first conversation on,
             # so that a conversation can be started by talking to an NPC (free-flow)
             try:
@@ -76,6 +77,17 @@ class GameStateManager:
     def clear_listening_cancel(self) -> None:
         if self.__stt:
             self.__stt.clear_cancel_waiting()
+
+    def set_push_to_talk(self, enabled: bool, key: str) -> None:
+        """Applies the push-to-talk settings reported by the game"""
+        if enabled and not self.__stt:
+            try:
+                self.__stt = Transcriber(self.__config) # starts from the saved settings, which are the ones passed in here
+            except Exception as e:
+                logger.warning(f'Could not set up push-to-talk: {e}')
+                self.__stt = None
+        if self.__stt:
+            self.__stt.set_push_to_talk(enabled, key)
 
     @property
     def is_conversation_active(self) -> bool:
@@ -234,7 +246,7 @@ class GameStateManager:
             self.__update_context(input_json)
         try:
             updated_player_text, update_events, player_spoken_sentence = self.__talk.process_player_input(player_text)
-        except ListeningCancelled:
+        except ListeningCanceled:
             # Another request (eg ending the conversation) is waiting to be handled, and takes it from here
             logger.log(23, 'Stopped waiting for player input')
             return {comm_consts.KEY_REPLYTYPE: comm_consts.KEY_REPLYTYPE_NPCTALK}

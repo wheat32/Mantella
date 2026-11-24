@@ -67,7 +67,7 @@ class VisionDefinitions:
     
     @staticmethod
     def get_vision_custom_token_count_config_value() -> ConfigValue:
-        description = """If the vision model chosen is not recognised by Mantella, the token count for the given model will default to this number.
+        description = """If the vision model chosen is not recognized by Mantella, the token count for the given model will default to this number.
                     If this is not the correct token count for your chosen model, you can change it here.
                     Keep in mind that if this number is greater than the actual token count of the model, then Mantella will crash if a given conversation exceeds the model's token limit."""
         return ConfigValueInt("vision_custom_token_count", "Custom Vision Model Token Count", description, 4096, 4096, 9999999, tags=[ConfigValueTag.advanced])
@@ -90,3 +90,11 @@ class VisionDefinitions:
                         Skyrim: Mantella presses the Print Screen key for the game to take a screenshot, which is removed from the game folder again after it has been read. Requires the game window to be focused, and Mantella to be started by the game.
                         Fallout 4: please ensure you configure screenshot capture settings in the Mantella Pip-Boy settings window."""
         return ConfigValueBool("use_game_screenshots", "Use Game Screenshots", description, False, tags=[ConfigValueTag.advanced])
+
+    @staticmethod
+    def get_use_frame_capture_config_value() -> ConfigValue:
+        description = """Experimental, Skyrim only. Used together with `Use Game Screenshots`.
+                        The game taking a screenshot of itself makes it freeze for a moment. With this setting, Mantella's SKSE plugin copies the picture the game is showing instead, and saves it in the background.
+                        If that does not work, the game's own screenshot is used as before, and a warning is logged once.
+                        Requires Mantella to be started by the game."""
+        return ConfigValueBool("use_frame_capture", "Fast Game Screenshots (Experimental)", description, False, tags=[ConfigValueTag.advanced])

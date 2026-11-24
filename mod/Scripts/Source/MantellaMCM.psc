@@ -13,8 +13,11 @@ int property oid_keymapPromptHotkey auto
 int property oid_keymapEndHotkey auto
 int property oid_keymapToggleHotkey auto
 int property oid_keymapEndConversationHotkey auto
-int property oid_keymapFreeFlowHotkey auto
+int property oid_keymapPushToTalkHotkey auto
+int property oid_pushToTalkEnabled auto
 int property oid_freeFlowUseNearest auto
+int property oid_freeFlowEnabled auto
+int property oid_showScreenshotMessages auto
 int property oid_freeFlowDistance auto
 int property oid_freeFlowIncludeCreatures auto
 int property oid_awarenessMaxCharacters auto
@@ -119,7 +122,7 @@ string MantellaMCMcurrentPage
 ; Whenever a new repository value OR a new MCM setting is added, up the MCM version number returned by `ManatellaMCM.GetVersion()`
 ; and add the corresponding default value in 'MCMRepository.assignDefaultSettings' in a block corresponding to the version number like the examples
 int Function GetVersion()
-    Return 8
+    Return 9
 EndFunction
 
 event OnVersionUpdate(int a_version)
@@ -243,8 +246,14 @@ Event OnOptionHighlight (Int optionID)
 		SetInfoText("Ends all Mantella conversations.")
 	elseIf optionID == oid_keymapToggleHotkey
 		SetInfoText("One key to add and remove NPCs. Looking at an NPC who is not in the conversation: starts a conversation with them, or adds them to the running one. Looking at an NPC who is in the conversation: removes them from it. Does nothing when not looking at an NPC.")
-	elseIf optionID == oid_keymapFreeFlowHotkey
-		SetInfoText("Free-flow conversations: set this to the same key as push-to-talk in the Mantella UI. Walk up to an NPC (or look at them) and start talking while holding the key: if they are not in a conversation with you yet, they are brought into it, and what you say is passed on to them. Leave unbound to disable.")
+	elseIf optionID == oid_pushToTalkEnabled
+		SetInfoText("With push-to-talk, the microphone is only listened to while you hold the Push-to-Talk Key. Pressing the key while an NPC speaks interrupts them, and free-flow conversations become available. If disabled, the microphone listens on its own whenever it is your turn to speak. A change made during a conversation applies from the next conversation on. \nDefault: On")
+	elseIf optionID == oid_keymapPushToTalkHotkey
+		SetInfoText("The key you hold while speaking, if Push-to-Talk is enabled. It also starts free-flow conversations. A key changed during a conversation applies from the next conversation on. \nDefault: V")
+	elseIf optionID == oid_freeFlowEnabled
+		SetInfoText("Free-flow conversations: walk up to an NPC (or look at them) and start talking while holding your push-to-talk key. If they are not in a conversation with you yet, they are brought into it, and they listen to what you say instead of greeting you. Needs Push-to-Talk to be enabled, and uses the Push-to-Talk Key under Controls. \nDefault: On")
+	elseIf optionID == oid_showScreenshotMessages
+		SetInfoText("Whether the game's \"ScreenShot: File created\" message is shown during Mantella conversations. With Vision and Use Game Screenshots enabled in the Mantella UI, the game takes a screenshot for every response. Outside of conversations the message is always shown. \nDefault: Off")
 	elseIf optionID == oid_freeFlowUseNearest
 		SetInfoText("When you press the Free-flow Talk Key without looking directly at anyone, talk to the nearest character on screen instead. If disabled, free-flow only works on the character under your crosshair. \nDefault: On")
 	elseIf optionID == oid_freeFlowDistance

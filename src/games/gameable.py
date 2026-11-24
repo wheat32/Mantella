@@ -262,6 +262,12 @@ class Gameable(ABC):
         character_race = parts[1].split('Race ')[0] if len(parts) > 1 else race # TODO: check if this covers "character_currentrace.split('<')[1].split('Race ')[0]" from FO4
         matcher = self._get_matching_df_rows_matcher(base_id, character_name, character_race)
         if isinstance(matcher, type(None)):
+            # The game numbers characters that share a name within a conversation ("Bandit", "Bandit 2").
+            # These are still the same kind of character, so they are looked up without their number
+            name_without_number = utils.get_name_without_number(character_name)
+            if name_without_number != character_name:
+                matcher = self._get_matching_df_rows_matcher(base_id, name_without_number, character_race)
+        if isinstance(matcher, type(None)):
             logger.info(f"Could not find {character_name} in {self.game_name_in_filepath}_characters.csv. Loading as a generic NPC.")
             character_info = self.load_unnamed_npc(character_name, character_race, gender, ingame_voice_model)
             is_generic_npc = True
