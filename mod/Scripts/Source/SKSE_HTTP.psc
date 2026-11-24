@@ -65,6 +65,9 @@ Function SetScreenshotMessageVisible(Bool visible) global native
 ; Research: writes the dialogue options the actor currently offers the player to Documents/My Games/Mantella/dialogue_options.txt.
 ; Returns how many were found, or a negative number on failure
 Int Function DumpDialogueOptions(Actor speaker) global native
+; The notable things the actor carries, the most interesting first: a lot of gold, notes and maps (with their description),
+; keys, valuable items and books. What is worn or wielded is left out
+String[] Function GetNotableItems(Actor carrier, Int minimumGold, Int minimumItemValue, Int maximumItems) global native
 VoiceType Function GetVoiceType(Actor actor) global native
 Function SetVoiceType(Actor actor, VoiceType voice) global native
 VoiceType Function GetRaceDefaultVoiceType(Actor actor) global native

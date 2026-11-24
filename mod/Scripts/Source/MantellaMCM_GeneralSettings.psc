@@ -44,6 +44,7 @@ function RightColumn(MantellaMCM mcm, MantellaRepository Repository) global
     mcm.AddHeaderOption("Awareness of Surroundings")
     mcm.oid_awarenessMaxCharacters = mcm.AddSliderOption("Max Characters Noticed", repository.awarenessMaxCharacters)
     mcm.oid_awarenessDistance = mcm.AddSliderOption("Notice Distance", repository.awarenessDistance)
+    mcm.oid_notableItemsEnabled = mcm.AddToggleOption("Notable Carried Items", repository.notableItemsEnabled)
 
     mcm.AddHeaderOption("NPC Actions")
     mcm.oid_NPCPackageToggle = mcm.AddToggleOption("NPCs Stop to Talk", Repository.NPCPackage)
@@ -187,6 +188,9 @@ function OptionUpdate(MantellaMCM mcm, int optionID, MantellaRepository Reposito
     elseIf optionID == mcm.oid_freeFlowEnabled
         repository.freeFlowEnabled =! repository.freeFlowEnabled
         mcm.SetToggleOptionValue(optionID, repository.freeFlowEnabled)
+    elseIf optionID == mcm.oid_notableItemsEnabled
+        repository.notableItemsEnabled =! repository.notableItemsEnabled
+        mcm.SetToggleOptionValue(optionID, repository.notableItemsEnabled)
     elseIf optionID == mcm.oid_freeFlowUseNearest
         repository.freeFlowUseNearest =! repository.freeFlowUseNearest
         mcm.SetToggleOptionValue(optionID, repository.freeFlowUseNearest)

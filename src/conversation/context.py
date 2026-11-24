@@ -404,7 +404,28 @@ class Context:
         equipment_descriptions = []
         for character in self.__npcs_in_conversation.get_non_player_characters():
                 equipment_descriptions.append(character.equipment.get_equipment_description(character.name))
-        return " ".join(equipment_descriptions)
+                notable_items_description = self.get_notable_items_description(character.name, character.get_custom_character_value(communication_constants.KEY_ACTOR_NOTABLEITEMS))
+                if notable_items_description:
+                    equipment_descriptions.append(notable_items_description)
+        return " ".join(description for description in equipment_descriptions if description)
+
+    @staticmethod
+    def get_notable_items_description(name: str, notable_items: Any) -> str:
+        """Describes the notable things an NPC carries (a lot of gold, notes, maps, keys, valuables), as reported by the game
+
+        Args:
+            name (str): the name of the NPC
+            notable_items (Any): the list of item names the game sent for the NPC, if any
+
+        Returns:
+            str: a sentence for the prompt, empty if the NPC carries nothing notable
+        """
+        if not isinstance(notable_items, list):
+            return ''
+        items = [str(item).strip() for item in notable_items if str(item).strip()]
+        if not items:
+            return ''
+        return f"{name} carries: {', '.join(items)}. These are {name}'s own belongings, which {name} knows about and may bring up now and then where it fits the conversation, without having to."
     
     @utils.time_it
     def __get_action_texts(self, actions: list[Action]) -> str:

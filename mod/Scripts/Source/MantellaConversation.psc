@@ -1047,10 +1047,24 @@ int function buildActorSetting(Actor actorToBuild)
     int customActorValuesHandle = SKSE_HTTP.createDictionary()
     If (isPlayerCharacter)
         AddCustomPCValues(customActorValuesHandle, actorToBuild)
+    ElseIf (repository.notableItemsEnabled)
+        AddNotableItems(customActorValuesHandle, actorToBuild)
     EndIf
     SKSE_HTTP.setNestedDictionary(handle, mConsts.KEY_ACTOR_CUSTOMVALUES, customActorValuesHandle)
     return handle
 endFunction
+
+; The notable things an NPC carries, for them to possibly bring up in conversation: a lot of gold, notes and maps, keys,
+; valuable items and books. What they wear and wield is left out, as that is described with their equipment
+Function AddNotableItems(int customActorValuesHandle, Actor carrier)
+    int minimumGold = 100
+    int minimumItemValue = 100
+    int maximumItems = 6
+    string[] notableItems = SKSE_HTTP.GetNotableItems(carrier, minimumGold, minimumItemValue, maximumItems)
+    if notableItems.Length > 0
+        SKSE_HTTP.setStringArray(customActorValuesHandle, mConsts.KEY_ACTOR_NOTABLEITEMS, notableItems)
+    endIf
+EndFunction
 
 Function AddCustomPCValues(int customActorValuesHandle, Actor actorToBuildCustomValuesFor)
     if(!repository.IsVR())

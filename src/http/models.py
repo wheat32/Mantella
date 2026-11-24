@@ -13,6 +13,7 @@ class Equipment(BaseModel):
 class ActorCustomValues(BaseModel):
     description: str = Field('', alias=comm_consts.KEY_ACTOR_PC_DESCRIPTION)
     voice_player_input: bool = Field(False, alias=comm_consts.KEY_ACTOR_PC_VOICEPLAYERINPUT)
+    notable_items: Optional[List[str]] = Field(None, alias=comm_consts.KEY_ACTOR_NOTABLEITEMS, description="Notable things an NPC carries (a lot of gold, notes, maps, keys, valuables)")
 
 class Actor(BaseModel):
     base_id: int = Field(..., alias=comm_consts.KEY_ACTOR_BASEID)

@@ -37,6 +37,7 @@ bool property freeFlowUseNearest auto
 bool property freeFlowEnabled auto
 bool property showScreenshotMessages auto
 bool property showNpcConversationMessages auto
+bool property notableItemsEnabled auto
 float property freeFlowDistance auto
 bool property freeFlowIncludeCreatures auto
 int property awarenessMaxCharacters auto
@@ -139,6 +140,7 @@ endEvent
 function assignDefaultSettings(int lastVersion, bool isFirstInit = false)
     If (lastVersion < 10 || isFirstInit)
         showNpcConversationMessages = false
+        notableItemsEnabled = true
     EndIf
     If (lastVersion < 9 || isFirstInit)
         ; The push-to-talk key is set here, in the game, and reported to Mantella. V (47) by default.
