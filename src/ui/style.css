@@ -173,6 +173,31 @@
     padding: 3px;
 }
 
+.custom-footer .mantella-version {
+    float: right;
+    font-size: 14px;
+    opacity: 0.7;
+    padding-top: 4px;
+}
+
+/* Shown at the top of the page for alpha / beta builds */
+.prerelease-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 2px;
+    font-size: 14px;
+}
+
+.badge-prerelease {
+    background-color: #b45309;
+    color: #ffffff;
+    padding: 2px 10px;
+    border-radius: 10px;
+    font-size: 12px;
+    letter-spacing: 0.05em;
+}
+
 .custom-footer a {
     text-decoration: none;
 }

@@ -1,3 +1,4 @@
+import html
 import os
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
@@ -33,6 +34,9 @@ class StartUI(routeable):
 
     def create_main_block(self) -> gr.Blocks:
         with gr.Blocks(title="Mantella", fill_height=True, analytics_enabled=False, theme= self.__get_theme(), css=self.__load_css(), js=self.CONSOLE_JS) as main_block:
+            prerelease_label = utils.get_prerelease_label()
+            if prerelease_label:
+                gr.HTML(self.get_prerelease_banner_html(utils.get_version(), prerelease_label))
             # with gr.Tab("Settings") as tabs:
             settings_page = self.__generate_settings_page()
             # Options that configure the XTTS server Mantella starts itself are meaningless if XTTS runs on another machine
@@ -49,12 +53,29 @@ class StartUI(routeable):
             self.__generate_console_section()
 
             with gr.Row(elem_classes="custom-footer"):
-                gr.HTML("""
-                    <div class="custom-footer">
-                        <a href="https://art-from-the-machine.github.io/Mantella/" target="_blank">Mantella Installation Guide</a>
-                    </div>
-                """)
+                gr.HTML(self.get_footer_html(utils.get_version()))
         return main_block
+
+    @staticmethod
+    def get_prerelease_banner_html(version: str, prerelease_label: str) -> str:
+        """The badge shown at the top of the page for a build that is not a normal release"""
+        kind = html.escape(prerelease_label.split('.')[0].upper()) # ALPHA, BETA, ...
+        return f"""
+            <div class="prerelease-banner">
+                <span class="badge badge-prerelease"><b>{kind}</b></span>
+                <span>Pre-release {html.escape(version)}: a test build that may have bugs.</span>
+            </div>
+        """
+
+    @staticmethod
+    def get_footer_html(version: str) -> str:
+        version_html = f'<span class="mantella-version">Mantella {html.escape(version)}</span>' if version else ''
+        return f"""
+            <div class="custom-footer">
+                <a href="https://art-from-the-machine.github.io/Mantella/" target="_blank">Mantella Installation Guide</a>
+                {version_html}
+            </div>
+        """
 
     def __on_setting_changed(self, config_value):
         """Applies settings that can take effect right away, without waiting for Mantella's services to be set up again"""

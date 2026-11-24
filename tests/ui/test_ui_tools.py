@@ -159,3 +159,12 @@ def test_prompts_are_grouped_by_game():
             for setting in group.value:
                 if not setting.is_hidden:
                     assert setting.identifier in created, setting.identifier
+
+
+def test_version_is_shown_in_the_web_ui():
+    from src.ui.start_ui import StartUI
+    footer = StartUI.get_footer_html('0.17.0-alpha.1')
+    assert 'Mantella 0.17.0-alpha.1' in footer and 'Installation Guide' in footer
+    assert 'mantella-version' not in StartUI.get_footer_html('')
+    banner = StartUI.get_prerelease_banner_html('0.17.0-beta.2', 'beta.2')
+    assert '<b>BETA</b>' in banner and '0.17.0-beta.2' in banner

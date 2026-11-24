@@ -44,7 +44,9 @@ function RightColumn(MantellaMCM mcm, MantellaRepository Repository) global
     mcm.AddHeaderOption("Awareness of Surroundings")
     mcm.oid_awarenessMaxCharacters = mcm.AddSliderOption("Max Characters Noticed", repository.awarenessMaxCharacters)
     mcm.oid_awarenessDistance = mcm.AddSliderOption("Notice Distance", repository.awarenessDistance)
-    mcm.oid_notableItemsEnabled = mcm.AddToggleOption("Notable Carried Items", repository.notableItemsEnabled)
+
+    mcm.AddHeaderOption("NPC Inventory")
+    mcm.oid_notableItemsEnabled = mcm.AddToggleOption("NPCs Know What They Carry", repository.notableItemsEnabled)
 
     mcm.AddHeaderOption("NPC Actions")
     mcm.oid_NPCPackageToggle = mcm.AddToggleOption("NPCs Stop to Talk", Repository.NPCPackage)
