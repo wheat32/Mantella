@@ -240,7 +240,7 @@ class Character:
         self.__tts_service = value
 
     def get_custom_character_value(self, key: str) -> Any:
-        if self.__custom_character_values.__contains__(key):
+        if self.__custom_character_values and self.__custom_character_values.__contains__(key):
             return self.__custom_character_values[key]
         return None
     

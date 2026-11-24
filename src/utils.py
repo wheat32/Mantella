@@ -84,11 +84,15 @@ def resolve_path():
 
 
 def get_version(default: str = '') -> str:
-    """Reads the version of this build from version.json, which is also what releases are tagged with"""
+    """Reads the version of this build from version.json, which is also what releases are tagged with.
+    A pre-release ("prerelease": "beta.1") is part of the version: 0.17.0-beta.1"""
     try:
         import json
         with open(os.path.join(resolve_path(), 'version.json'), 'r', encoding='utf-8') as f:
-            return str(json.load(f)['app_version'])
+            version_info = json.load(f)
+        version = str(version_info['app_version'])
+        prerelease = str(version_info.get('prerelease') or '').strip()
+        return f'{version}-{prerelease}' if prerelease else version
     except Exception:
         return default
 

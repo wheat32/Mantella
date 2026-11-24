@@ -8,7 +8,11 @@ event OnEffectStart(Actor target, Actor caster)
     actors[0] = caster
     actors[1] = target
     if(!conversation.IsRunning())
-        Debug.Notification("Starting conversation...")
+        ; A conversation between two NPCs (radiant dialogue) starts quietly, unless its messages are enabled in the mod menu
+        Actor player = Game.GetPlayer()
+        if caster == player || target == player || conversation.repository.showNpcConversationMessages
+            Debug.Notification("Starting conversation...")
+        endIf
         conversation.Start()
         conversation.StartConversation(actors)
     Else

@@ -147,6 +147,14 @@ jobs:
         id: tag
         run: |
           VERSION=$(jq -r '.app_version' version.json)
+          # "prerelease" in version.json (eg "beta.1") makes this a pre-release: 0.17.0-beta.1. Empty or missing: a normal release
+          PRERELEASE=$(jq -r '.prerelease // ""' version.json)
+          if [ -n "$PRERELEASE" ]; then
+            VERSION="$VERSION-$PRERELEASE"
+            echo "IS_PRERELEASE=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "IS_PRERELEASE=false" >> "$GITHUB_OUTPUT"
+          fi
           echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
           echo "TAG=v$VERSION" >> "$GITHUB_OUTPUT"
           echo "NAME=v$VERSION" >> "$GITHUB_OUTPUT"
@@ -183,4 +191,5 @@ jobs:
             > This is a community build, a fork of [Mantella](https://github.com/art-from-the-machine/Mantella) with fixes for Skyrim and for Linux (Proton). See the [README](https://github.com/${{ github.repository }}/blob/main/README.md) for what is different.
           files: |
             Mantella-Skyrim-${{ steps.tag.outputs.VERSION }}.zip
-          make_latest: true
+          prerelease: ${{ steps.tag.outputs.IS_PRERELEASE == 'true' }}
+          make_latest: ${{ steps.tag.outputs.IS_PRERELEASE != 'true' }}

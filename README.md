@@ -125,7 +125,7 @@ python packaging/build_mod_archive.py
 
 ## Releases
 
-Every push to `main` runs the tests, builds the mod archive and publishes it as a GitHub release tagged with the version in `version.json`. Pull requests to `main` and `dev` run the tests and build the archive without releasing it.
+Every push to `main` runs the tests, builds the mod archive and publishes it as a GitHub release tagged with the version in `version.json`. Set `prerelease` in that file (for example `"alpha.1"` or `"beta.2"`) to publish a pre-release such as `v0.17.0-beta.2`, which is not marked as the latest release; leave it empty for a normal release. Pull requests to `main` and `dev` run the tests and build the archive without releasing it.
 
 ## Related repos
 - Mantella (upstream): [https://github.com/art-from-the-machine/Mantella](https://github.com/art-from-the-machine/Mantella)

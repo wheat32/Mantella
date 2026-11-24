@@ -458,3 +458,13 @@ def test_skyrim_frame_capture(tmp_path, monkeypatch):
         return True
     monkeypatch.setattr(manager, "_request_frame_capture", plugin_saves_black_frame)
     assert manager._capture_skyrim_frame(timeout=1.0) is None
+
+
+def test_notable_items_are_described_in_the_prompt():
+    """Notable things an NPC carries (reported by the game) are passed on to the LLM, as something that may come up"""
+    from src.conversation.context import Context
+    assert Context.get_notable_items_description('bandit', None) == ''
+    assert Context.get_notable_items_description('bandit', []) == ''
+    assert Context.get_notable_items_description('bandit', 'not a list') == ''
+    description = Context.get_notable_items_description('bandit', ['250 gold', 'Treasure Map I (Map to a hidden treasure near Riverwood)', ' '])
+    assert description.startswith('bandit carries: 250 gold, Treasure Map I (Map to a hidden treasure near Riverwood).')

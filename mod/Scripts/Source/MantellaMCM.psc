@@ -18,10 +18,12 @@ int property oid_pushToTalkEnabled auto
 int property oid_freeFlowUseNearest auto
 int property oid_freeFlowEnabled auto
 int property oid_showScreenshotMessages auto
+int property oid_showNpcConversationMessages auto
 int property oid_freeFlowDistance auto
 int property oid_freeFlowIncludeCreatures auto
 int property oid_awarenessMaxCharacters auto
 int property oid_awarenessDistance auto
+int property oid_notableItemsEnabled auto
 int property oid_keymapCustomGameEventHotkey auto
 int property oid_keymapRadiantHotkey auto
 
@@ -103,6 +105,7 @@ int property oid_enableVanillaDialogueAwareness auto
 
 int property oid_debugNPCSelectMode auto
 int property oid_restartMantellaExe Auto
+int property oid_dumpDialogueOptions auto
 int property oid_httpPort auto
 
 string property PAGE_GENERAL = "General" auto
@@ -122,7 +125,7 @@ string MantellaMCMcurrentPage
 ; Whenever a new repository value OR a new MCM setting is added, up the MCM version number returned by `ManatellaMCM.GetVersion()`
 ; and add the corresponding default value in 'MCMRepository.assignDefaultSettings' in a block corresponding to the version number like the examples
 int Function GetVersion()
-    Return 9
+    Return 10
 EndFunction
 
 event OnVersionUpdate(int a_version)
@@ -252,6 +255,10 @@ Event OnOptionHighlight (Int optionID)
 		SetInfoText("The key you hold while speaking, if Push-to-Talk is enabled. It also starts free-flow conversations. A key changed during a conversation applies from the next conversation on. \nDefault: V")
 	elseIf optionID == oid_freeFlowEnabled
 		SetInfoText("Free-flow conversations: walk up to an NPC (or look at them) and start talking while holding your push-to-talk key. If they are not in a conversation with you yet, they are brought into it, and they listen to what you say instead of greeting you. Needs Push-to-Talk to be enabled, and uses the Push-to-Talk Key under Controls. \nDefault: On")
+	elseIf optionID == oid_dumpDialogueOptions
+		SetInfoText("For development. Writes the game's own dialogue options of the character you were last looking at (or else the closest one) to Documents/My Games/Mantella/dialogue_options.txt, with the lines they would answer with.")
+	elseIf optionID == oid_showNpcConversationMessages
+		SetInfoText("Whether messages such as \"Starting conversation...\", \"Conversation ended.\", \"... has died\" and \"... left the conversation.\" are shown for conversations between NPCs that you are not part of (radiant dialogue). The messages of your own conversations are always shown. \nDefault: Off")
 	elseIf optionID == oid_showScreenshotMessages
 		SetInfoText("Whether the game's \"ScreenShot: File created\" message is shown during Mantella conversations. With Vision and Use Game Screenshots enabled in the Mantella UI, the game takes a screenshot for every response. Outside of conversations the message is always shown. \nDefault: Off")
 	elseIf optionID == oid_freeFlowUseNearest
@@ -262,6 +269,8 @@ Event OnOptionHighlight (Int optionID)
 		SetInfoText("Whether the nearest character picked by free-flow may be a creature or animal. Characters under your crosshair can always be talked to. \nDefault: Off")
 	elseIf optionID == oid_awarenessMaxCharacters
 		SetInfoText("How many characters around you (outside of the conversation) NPCs are told about at most. Only characters that can be seen, or heard (a dragon, or fighting close by), are counted, nearest first. \nDefault: 10")
+	elseIf optionID == oid_notableItemsEnabled
+		SetInfoText("NPCs know about the notable things they carry: a lot of gold, books, notes and maps, keys, and valuable items. These can come up in conversation, including conversations between NPCs. What they wear and wield is covered by the Equipment page. \nDefault: On")
 	elseIf optionID == oid_awarenessDistance
 		SetInfoText("How far away (in meters) characters can be for NPCs to be told about them, if they can be seen or heard. \nDefault: 150")
 	elseIf optionID == oid_keymapEndConversationHotkey
