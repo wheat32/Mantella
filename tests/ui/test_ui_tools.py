@@ -115,3 +115,47 @@ def test_reset_all_button_of_a_settings_tab():
     updates = reset_all(True)
     assert all(prompt.value == prompt.default_value for prompt in prompts)
     assert len(updates) > len(prompts) # every setting of the tab gets its default back in the UI
+
+
+def test_prompts_are_grouped_by_game():
+    """Settings of a tab can be divided over tabs of their own, and none of them gets lost"""
+    import gradio as gr
+    from src.ui.settings_ui_constructor import SettingsUIConstructor
+    from src.config.mantella_config_value_definitions_new import MantellaConfigValueDefinitionsNew
+
+    definitions = MantellaConfigValueDefinitionsNew.get_config_values(False)
+    with gr.Blocks() as blocks:
+        constructor = SettingsUIConstructor(None, group_sub_tabs={"Prompts": [
+            ("All Games", lambda setting: not setting.identifier.startswith(("skyrim_", "fallout4_"))),
+            ("Skyrim", lambda setting: setting.identifier.startswith("skyrim_")),
+            ("Fallout 4", lambda setting: setting.identifier.startswith("fallout4_")),
+        ]})
+        for group in definitions.base_groups:
+            with gr.Tab(group.name):
+                group.accept_visitor(constructor)
+
+    tabs = {block.label: block for block in blocks.blocks.values() if isinstance(block, gr.Tab)}
+    assert {"Skyrim", "Fallout 4", "All Games"} <= set(tabs)
+    tab_order = [block.label for block in blocks.blocks.values() if isinstance(block, gr.Tab) and block.label in ("Skyrim", "Fallout 4", "All Games")]
+    assert tab_order == ["All Games", "Skyrim", "Fallout 4"]
+
+    def get_tab_of(identifier: str) -> str | None:
+        setting = [cv for cv in constructor.config_value_to_ui_element if cv.identifier == identifier][0]
+        parent = constructor.config_value_to_ui_element[setting].parent
+        while parent is not None and not (isinstance(parent, gr.Tab) and parent.label in ("Skyrim", "Fallout 4", "All Games")):
+            parent = parent.parent
+        return parent.label if parent is not None else None
+
+    assert get_tab_of("skyrim_prompt") == "Skyrim"
+    assert get_tab_of("skyrim_radiant_prompt") == "Skyrim"
+    assert get_tab_of("fallout4_multi_npc_prompt") == "Fallout 4"
+    assert get_tab_of("memory_prompt") == "All Games"
+    assert get_tab_of("radiant_max_turns") == "All Games"
+
+    # every visible setting of every tab has been created
+    created = {cv.identifier for cv in constructor.config_value_to_ui_element}
+    for group in definitions.base_groups:
+        if not group.is_hidden:
+            for setting in group.value:
+                if not setting.is_hidden:
+                    assert setting.identifier in created, setting.identifier

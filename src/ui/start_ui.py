@@ -24,7 +24,12 @@ class StartUI(routeable):
         super().__init__(config)
         self.__constructor = SettingsUIConstructor(self.__on_setting_changed,
                                                    group_extras={"Other": self.__generate_saved_logs_controls},
-                                                   groups_with_reset_all={"Prompts"})
+                                                   groups_with_reset_all={"Prompts"},
+                                                   group_sub_tabs={"Prompts": [
+                                                       ("All Games", lambda setting: not setting.identifier.startswith(("skyrim_", "fallout4_"))),
+                                                       ("Skyrim", lambda setting: setting.identifier.startswith("skyrim_")),
+                                                       ("Fallout 4", lambda setting: setting.identifier.startswith("fallout4_")),
+                                                   ]})
 
     def create_main_block(self) -> gr.Blocks:
         with gr.Blocks(title="Mantella", fill_height=True, analytics_enabled=False, theme= self.__get_theme(), css=self.__load_css(), js=self.CONSOLE_JS) as main_block:

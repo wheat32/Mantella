@@ -45,16 +45,20 @@ class ModelConfig(TypedDict):
 class SettingsUIConstructor(ConfigValueVisitor):
     def __init__(self, on_setting_changed: Callable[[ConfigValue], None] | None = None,
                  group_extras: dict[str, Callable[[], None]] | None = None,
-                 groups_with_reset_all: set[str] | None = None) -> None:
+                 groups_with_reset_all: set[str] | None = None,
+                 group_sub_tabs: dict[str, list[tuple[str, Callable[[ConfigValue], bool] | None]]] | None = None) -> None:
         """
         Args:
             on_setting_changed: Optional callback that is called with the config value whenever a setting is changed in the UI
             group_extras: Per identifier of a settings group (a tab), a function that adds further UI elements below the settings of that group
             groups_with_reset_all: Identifiers of the settings groups (tabs) that get a button to reset all of their settings to the defaults
+            group_sub_tabs: Per identifier of a settings group, the tabs its settings are divided over: the name of each tab with a function that
+                tells whether a setting belongs in it. A setting goes into the first tab that takes it. None instead of a function: all remaining settings
         """
         super().__init__()
         self.__group_extras: dict[str, Callable[[], None]] = group_extras or {}
         self.__groups_with_reset_all: set[str] = groups_with_reset_all or set()
+        self.__group_sub_tabs: dict[str, list[tuple[str, Callable[[ConfigValue], bool] | None]]] = group_sub_tabs or {}
         self.__on_setting_changed: Callable[[ConfigValue], None] | None = on_setting_changed
         self.__identifier_to_container: dict[str, Any] = {}
         self.__identifier_to_config_value: dict[str, ConfigValue] = {}
@@ -297,36 +301,64 @@ class SettingsUIConstructor(ConfigValueVisitor):
         return self.__construct_error_message_panel(result.error_message, is_visible=not result.is_success)
 
     def visit_ConfigValueGroup(self, config_value: ConfigValueGroup):
-        if not config_value.is_hidden:            
-            has_advanced_values = False
-            regular_settings = []
-            advanced_settings = []
-            for cf in config_value.value:
-                if not cf.is_hidden:
-                    if ConfigValueTag.advanced in cf.tags:
-                        advanced_settings.append(cf)
-                        has_advanced_values = True
-                    else:
-                        regular_settings.append(cf)
+        if not config_value.is_hidden:
+            settings = [cf for cf in config_value.value if not cf.is_hidden]
 
             reset_all_button = None
             if config_value.identifier in self.__groups_with_reset_all:
                 with gr.Row():
                     reset_all_button = gr.Button(f"Reset All {config_value.name} to Default", size='sm', scale=0, min_width=260)
 
-            for i, cf in enumerate(regular_settings):
-                cf.accept_visitor(self)
+            sub_tabs = self.__group_sub_tabs.get(config_value.identifier)
+            if sub_tabs:
+                remaining = list(settings)
+                with gr.Tabs():
+                    for tab_name, belongs_in_tab in sub_tabs:
+                        tab_settings = [cf for cf in remaining if belongs_in_tab is None or belongs_in_tab(cf)]
+                        remaining = [cf for cf in remaining if cf not in tab_settings]
+                        if tab_settings:
+                            with gr.Tab(tab_name):
+                                self.__construct_settings(tab_settings)
+                if remaining: # settings no tab asked for are not left out
+                    self.__construct_settings(remaining)
+            else:
+                self.__construct_settings(settings, self.__group_extras.get(config_value.identifier))
 
-            if config_value.identifier in self.__group_extras:
+            if sub_tabs and config_value.identifier in self.__group_extras:
                 self.__group_extras[config_value.identifier]()
 
-            if has_advanced_values:
-                with gr.Accordion(label="Advanced", open=False):
-                    for cf in advanced_settings:
-                        cf.accept_visitor(self)
-
             if reset_all_button is not None:
-                self.__setup_reset_all(reset_all_button, config_value.name, regular_settings + advanced_settings)
+                self.__setup_reset_all(reset_all_button, config_value.name, settings)
+
+    def __construct_settings(self, settings: list[ConfigValue], add_extras: Callable[[], None] | None = None) -> None:
+        """Creates the UI elements of the given settings: the regular ones first, the advanced ones in a section that is closed at first
+
+        Args:
+            settings: The settings to create
+            add_extras: Optional function that adds further UI elements between the regular and the advanced settings
+        """
+        regular_settings = [cf for cf in settings if ConfigValueTag.advanced not in cf.tags]
+        advanced_settings = [cf for cf in settings if ConfigValueTag.advanced in cf.tags]
+
+        for cf in regular_settings:
+            cf.accept_visitor(self)
+        self.__construct_pending_shared_setting()
+
+        if add_extras:
+            add_extras()
+
+        if advanced_settings:
+            with gr.Accordion(label="Advanced", open=False):
+                for cf in advanced_settings:
+                    cf.accept_visitor(self)
+                self.__construct_pending_shared_setting()
+
+    def __construct_pending_shared_setting(self) -> None:
+        """A setting that shares its row is only created together with the one after it. At the end of a section there is none,
+        and without this it would end up in the next section (or not be created at all)"""
+        if self.__pending_shared_setting is not None:
+            self.__create_single_setting(self.__pending_shared_setting)
+            self.__pending_shared_setting = None
 
     def __setup_reset_all(self, reset_all_button: gr.Button, group_name: str, settings: list[ConfigValue]) -> None:
         """Makes the button reset the given settings to their default values, after asking for confirmation"""
