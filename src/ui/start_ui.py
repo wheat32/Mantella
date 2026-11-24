@@ -22,7 +22,9 @@ class StartUI(routeable):
     BANNER = "docs/_static/img/mantella_banner.png"
     def __init__(self, config: ConfigLoader) -> None:
         super().__init__(config)
-        self.__constructor = SettingsUIConstructor(self.__on_setting_changed)
+        self.__constructor = SettingsUIConstructor(self.__on_setting_changed,
+                                                   group_extras={"Other": self.__generate_saved_logs_controls},
+                                                   groups_with_reset_all={"Prompts"})
 
     def create_main_block(self) -> gr.Blocks:
         with gr.Blocks(title="Mantella", fill_height=True, analytics_enabled=False, theme= self.__get_theme(), css=self.__load_css(), js=self.CONSOLE_JS) as main_block:
@@ -60,6 +62,13 @@ class StartUI(routeable):
         deleted = get_console_log_file().delete_saved_logs(self._config.save_folder, logger)
         logs_folder = to_host_path(os.path.join(self._config.save_folder, 'logs'))
         return f"Deleted {deleted} saved console log file(s) from `{logs_folder}`." if deleted else f"There are no saved console logs in `{logs_folder}`."
+
+    def __generate_saved_logs_controls(self):
+        """The button for deleting saved console logs, shown below the console log settings of the `Other` tab"""
+        with gr.Row():
+            delete_logs_button = gr.Button("Delete Saved Logs", size='sm', scale=0, min_width=160)
+            delete_logs_status = gr.Markdown("")
+        delete_logs_button.click(self.__delete_saved_logs, None, delete_logs_status)
 
     def _get_memory_editor(self) -> MemoryEditor:
         game_folder = "Fallout4" if self._config.game.base_game == GameEnum.FALLOUT4 else "Skyrim"
@@ -103,12 +112,10 @@ class StartUI(routeable):
         with gr.Column(elem_classes="console-section"):
             with gr.Row(elem_classes="console-header"):
                 gr.HTML('<h3 style="margin: 0;">Console</h3>')
-                delete_logs_button = gr.Button("Delete Saved Logs", size='sm', scale=0, min_width=160)
                 restart_button = gr.Button("Restart Mantella", size='sm', scale=0, min_width=160)
                 stop_button = gr.Button("Stop Mantella", variant="stop", size='sm', scale=0, min_width=160)
             control_status = gr.Markdown("")
             gr.HTML('<div id="mantella-console" class="mantella-console" role="log" aria-label="Mantella console output"></div>')
-            delete_logs_button.click(self.__delete_saved_logs, None, control_status)
             restart_button.click(process_control.restart_mantella, None, control_status)
             stop_button.click(process_control.stop_mantella, None, control_status)
 

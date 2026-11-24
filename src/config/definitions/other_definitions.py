@@ -113,7 +113,7 @@ class OtherDefinitions:
     def get_save_console_logs_config_value() -> ConfigValue:
         description = """Save everything shown in the console to a separate file for each time Mantella is run.
                         The files are saved to the `logs` folder next to config.ini (My Games/Mantella/logs/console_<date>_<time>.log).
-                        How much is kept is set by the two settings below, and the `Delete Saved Logs` button under the console at the bottom of this page removes all of them.
+                        How much is kept is set by the two settings below, and the `Delete Saved Logs` button under them removes all of them.
                         Useful for debugging."""
         return ConfigValueBool("save_console_logs", "Save Console Logs", description, False)
 

@@ -103,6 +103,7 @@ int property oid_enableVanillaDialogueAwareness auto
 
 int property oid_debugNPCSelectMode auto
 int property oid_restartMantellaExe Auto
+int property oid_dumpDialogueOptions auto
 int property oid_httpPort auto
 
 string property PAGE_GENERAL = "General" auto
@@ -252,6 +253,8 @@ Event OnOptionHighlight (Int optionID)
 		SetInfoText("The key you hold while speaking, if Push-to-Talk is enabled. It also starts free-flow conversations. A key changed during a conversation applies from the next conversation on. \nDefault: V")
 	elseIf optionID == oid_freeFlowEnabled
 		SetInfoText("Free-flow conversations: walk up to an NPC (or look at them) and start talking while holding your push-to-talk key. If they are not in a conversation with you yet, they are brought into it, and they listen to what you say instead of greeting you. Needs Push-to-Talk to be enabled, and uses the Push-to-Talk Key under Controls. \nDefault: On")
+	elseIf optionID == oid_dumpDialogueOptions
+		SetInfoText("For development. Writes the game's own dialogue options of the character you were last looking at (or else the closest one) to Documents/My Games/Mantella/dialogue_options.txt, with the lines they would answer with.")
 	elseIf optionID == oid_showScreenshotMessages
 		SetInfoText("Whether the game's \"ScreenShot: File created\" message is shown during Mantella conversations. With Vision and Use Game Screenshots enabled in the Mantella UI, the game takes a screenshot for every response. Outside of conversations the message is always shown. \nDefault: Off")
 	elseIf optionID == oid_freeFlowUseNearest

@@ -83,3 +83,35 @@ def test_restart_command(monkeypatch):
     monkeypatch.setattr(sys, "frozen", False, raising=False)
     command = process_control.get_restart_command()
     assert command[0] == sys.executable and command[-1] == "--integrated" and len(command) == 3
+
+
+def test_reset_all_button_of_a_settings_tab():
+    """The Prompts tab can be reset to its defaults in one go, after a confirmation"""
+    import gradio as gr
+    from src.ui.settings_ui_constructor import SettingsUIConstructor
+    from src.config.mantella_config_value_definitions_new import MantellaConfigValueDefinitionsNew
+
+    definitions = MantellaConfigValueDefinitionsNew.get_config_values(False)
+    extras_added = []
+    with gr.Blocks() as blocks:
+        constructor = SettingsUIConstructor(None, group_extras={"Other": lambda: extras_added.append(True)}, groups_with_reset_all={"Prompts"})
+        for group in definitions.base_groups:
+            with gr.Tab(group.name):
+                group.accept_visitor(constructor)
+
+    assert extras_added == [True] # only the Other tab gets its extra elements
+    button_labels = [block.value for block in blocks.blocks.values() if isinstance(block, gr.Button)]
+    assert button_labels.count("Reset All Prompts to Default") == 1
+
+    functions = blocks.fns.values() if isinstance(blocks.fns, dict) else blocks.fns
+    reset_all = [f.fn for f in functions if f.fn is not None and f.fn.__name__ == 'reset_all'][0]
+    prompts = [cv for cv in constructor.config_value_to_ui_element if cv.identifier in ('skyrim_prompt', 'memory_prompt')]
+    assert len(prompts) == 2
+    for prompt in prompts:
+        prompt.value = 'my own prompt {name}'
+
+    reset_all(False) # the question was answered with "Cancel"
+    assert all(prompt.value == 'my own prompt {name}' for prompt in prompts)
+    updates = reset_all(True)
+    assert all(prompt.value == prompt.default_value for prompt in prompts)
+    assert len(updates) > len(prompts) # every setting of the tab gets its default back in the UI

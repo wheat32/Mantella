@@ -3,6 +3,7 @@
 #include <cpr/cpr.h>
 #include <SKSE_HTTP_TypedDictionary.h>
 #include <FrameCapture.h>
+#include <DialogueOptions.h>
 #include <nlohmann/json.hpp>
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/msvc_sink.h>
@@ -778,6 +779,7 @@ bool Bind(RE::BSScript::IVirtualMachine* vm)
     vm->RegisterFunction("SetVoiceType", className, SetVoiceType);
     vm->RegisterFunction("RenameScreenshot", className, RenameScreenshot);
     vm->RegisterFunction("SetScreenshotMessageVisible", className, SetScreenshotMessageVisible);
+    vm->RegisterFunction("DumpDialogueOptions", className, DialogueOptions::Dump);
     vm->RegisterFunction("GetRaceDefaultVoiceType", className, GetRaceDefaultVoiceType);
     vm->RegisterFunction("SetRaceDefaultVoiceType", className, SetRaceDefaultVoiceType);
     vm->RegisterFunction("StopVoiceLine", className, StopVoiceLine);

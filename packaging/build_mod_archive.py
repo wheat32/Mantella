@@ -43,8 +43,11 @@ NEVER_PACKAGED = ('GPT_SECRET_KEY.txt', 'secret_keys.json', 'meta.ini', 'config.
 
 
 def get_version() -> str:
+    """The version in version.json, with its pre-release label if it has one (0.17.0-beta.1)"""
     with open(PROJECT_ROOT / 'version.json', 'r', encoding='utf-8') as f:
-        return json.load(f)['app_version']
+        version_info = json.load(f)
+    prerelease = str(version_info.get('prerelease') or '').strip()
+    return f"{version_info['app_version']}-{prerelease}" if prerelease else version_info['app_version']
 
 
 def build_executable():

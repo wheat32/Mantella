@@ -12,6 +12,7 @@ function LeftColumn(MantellaMCM mcm, MantellaRepository Repository) global
     mcm.oid_restartMantellaExe = mcm.AddTextOption("Restart Mantella.exe", "")
 	mcm.oid_debugNPCselectMode = mcm.AddToggleOption("NPC Debug Select Mode", Repository.NPCdebugSelectModeEnabled)
     mcm.oid_showScreenshotMessages = mcm.AddToggleOption("Show Screenshot Messages", Repository.showScreenshotMessages)
+    mcm.oid_dumpDialogueOptions = mcm.AddTextOption("Dump Dialogue Options", "")
 endfunction
 
 function RightColumn(MantellaMCM mcm, MantellaRepository Repository) global
@@ -52,7 +53,22 @@ function SliderOptionAccept(MantellaMCM mcm, int optionID, float value, Mantella
 endfunction
 
 function OptionUpdate(MantellaMCM mcm, int optionID, MantellaRepository Repository) global
-	if optionID == mcm.oid_showScreenshotMessages
+	if optionID == mcm.oid_dumpDialogueOptions
+		Actor speaker = Game.GetCurrentCrosshairRef() as Actor
+		if !speaker
+			speaker = Game.FindClosestActorFromRef(Game.GetPlayer(), 500.0)
+		endIf
+		if !speaker
+			Debug.MessageBox("No character found. Look at a character or stand next to one, then open this menu again.")
+		else
+			int count = SKSE_HTTP.DumpDialogueOptions(speaker)
+			if count < 0
+				Debug.MessageBox("The dialogue options of " + speaker.GetDisplayName() + " could not be worked out.")
+			else
+				Debug.MessageBox(count + " dialogue options of " + speaker.GetDisplayName() + " written to Documents/My Games/Mantella/dialogue_options.txt")
+			endIf
+		endIf
+	elseif optionID == mcm.oid_showScreenshotMessages
 		Repository.showScreenshotMessages =! Repository.showScreenshotMessages
 		mcm.SetToggleOptionValue(optionID, Repository.showScreenshotMessages)
 		if (Quest.GetQuest("MantellaConversation") as MantellaConversation).IsRunning()

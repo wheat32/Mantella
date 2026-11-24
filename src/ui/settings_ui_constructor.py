@@ -43,12 +43,18 @@ class ModelConfig(TypedDict):
     model_list_getter: Callable[[str], Any]  # Function to get model list based on service
 
 class SettingsUIConstructor(ConfigValueVisitor):
-    def __init__(self, on_setting_changed: Callable[[ConfigValue], None] | None = None) -> None:
+    def __init__(self, on_setting_changed: Callable[[ConfigValue], None] | None = None,
+                 group_extras: dict[str, Callable[[], None]] | None = None,
+                 groups_with_reset_all: set[str] | None = None) -> None:
         """
         Args:
             on_setting_changed: Optional callback that is called with the config value whenever a setting is changed in the UI
+            group_extras: Per identifier of a settings group (a tab), a function that adds further UI elements below the settings of that group
+            groups_with_reset_all: Identifiers of the settings groups (tabs) that get a button to reset all of their settings to the defaults
         """
         super().__init__()
+        self.__group_extras: dict[str, Callable[[], None]] = group_extras or {}
+        self.__groups_with_reset_all: set[str] = groups_with_reset_all or set()
         self.__on_setting_changed: Callable[[ConfigValue], None] | None = on_setting_changed
         self.__identifier_to_container: dict[str, Any] = {}
         self.__identifier_to_config_value: dict[str, ConfigValue] = {}
@@ -303,13 +309,44 @@ class SettingsUIConstructor(ConfigValueVisitor):
                     else:
                         regular_settings.append(cf)
 
+            reset_all_button = None
+            if config_value.identifier in self.__groups_with_reset_all:
+                with gr.Row():
+                    reset_all_button = gr.Button(f"Reset All {config_value.name} to Default", size='sm', scale=0, min_width=260)
+
             for i, cf in enumerate(regular_settings):
                 cf.accept_visitor(self)
-            
+
+            if config_value.identifier in self.__group_extras:
+                self.__group_extras[config_value.identifier]()
+
             if has_advanced_values:
                 with gr.Accordion(label="Advanced", open=False):
                     for cf in advanced_settings:
                         cf.accept_visitor(self)
+
+            if reset_all_button is not None:
+                self.__setup_reset_all(reset_all_button, config_value.name, regular_settings + advanced_settings)
+
+    def __setup_reset_all(self, reset_all_button: gr.Button, group_name: str, settings: list[ConfigValue]) -> None:
+        """Makes the button reset the given settings to their default values, after asking for confirmation"""
+        settings = [cf for cf in settings if cf in self.__config_value_to_ui_element]
+        inputs = [self.__config_value_to_ui_element[cf] for cf in settings]
+        if not inputs or not hasattr(reset_all_button, "_id"):
+            return
+
+        def reset_all(is_confirmed: bool):
+            if not is_confirmed:
+                return [gr.update() for _ in settings]
+            for cf in settings:
+                self.__on_change(cf, cf.default_value)
+            gr.Info(f'All {group_name} have been reset to their defaults.')
+            return [gr.update(value=cf.value) for cf in settings]
+
+        # The question is asked in the browser. Its answer replaces the value of the (hidden) input passed to reset_all
+        is_confirmed = gr.Checkbox(value=False, visible=False)
+        question = f"Reset all {group_name} to their defaults? Your own changes to them will be lost."
+        reset_all_button.click(reset_all, inputs=is_confirmed, outputs=inputs, js=f"() => [confirm({question!r})]")
 
     def visit_ConfigValueInt(self, config_value: ConfigValueInt):
         def create_input_component(raw_config_value: ConfigValue) -> gr.Number:
