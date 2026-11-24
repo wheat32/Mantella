@@ -61,3 +61,30 @@ def test_same_windows_path():
     assert wine._is_same_windows_path("Z:\\mnt\\games\\Skyrim\\data", "z:/mnt/games/Skyrim/Data\\")
     # a path in a mod manager's virtual folder converts to somewhere else (eg its overwrite folder)
     assert not wine._is_same_windows_path("Z:\\mnt\\mo2\\overwrite\\SKSE", "Z:\\mnt\\games\\Skyrim\\data\\SKSE")
+
+
+def test_virtual_paths_are_written_the_way_the_host_writes_them(monkeypatch):
+    """A path in a mod manager's virtual folder has no place of its own on the host. It is still shown without the Z: drive"""
+    import ctypes
+    import types
+    monkeypatch.setattr(wine, "is_running_under_wine", lambda: True)
+    monkeypatch.setattr(ctypes, "windll", types.SimpleNamespace(kernel32=None), raising=False)
+    monkeypatch.setattr(wine.os.path, "abspath", lambda path: path)
+
+    virtual_path = "Z:\\mnt\\games\\Skyrim Special Edition\\data\\SKSE\\Plugins\\MantellaSoftware"
+    def get_unix_file_name(kernel32, windows_path):
+        if windows_path == "Z:\\":
+            return "/"
+        if windows_path == "C:\\":
+            return "/mnt/games/pfx/drive_c"
+        if windows_path == "Z:\\home\\user\\Games":
+            return "/home/user/Games"
+        return "/mnt/mo2/overwrite/SKSE/Plugins/MantellaSoftware" # where Wine says the virtual folder is
+    monkeypatch.setattr(wine, "_get_unix_file_name", get_unix_file_name)
+    monkeypatch.setattr(wine, "to_windows_path", lambda host_path: "Z:" + host_path.replace("/", "\\"))
+
+    assert wine.to_host_path(virtual_path) == "/mnt/games/Skyrim Special Edition/data/SKSE/Plugins/MantellaSoftware"
+    # a path Wine resolves truthfully is converted as before
+    assert wine.to_host_path("Z:\\home\\user\\Games") == "/home/user/Games"
+    # a drive that is not the host's file system keeps its Windows form
+    assert wine.to_host_path("C:\\users\\steamuser\\Documents") == "C:\\users\\steamuser\\Documents"
