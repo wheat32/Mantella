@@ -468,3 +468,45 @@ def test_notable_items_are_described_in_the_prompt():
     assert Context.get_notable_items_description('bandit', 'not a list') == ''
     description = Context.get_notable_items_description('bandit', ['250 gold', 'Treasure Map I (Map to a hidden treasure near Riverwood)', ' '])
     assert description.startswith('bandit carries: 250 gold, Treasure Map I (Map to a hidden treasure near Riverwood).')
+
+
+def test_system_information_printed_at_startup(tmp_path, monkeypatch):
+    import os
+    import src.system_info as system_info
+    from src.config.definitions.game_definitions import GameEnum
+
+    # the version is read from the file itself: signature, structure version, then the version as two 32 bit numbers
+    program = tmp_path / 'program.exe'
+    program.write_bytes(b'MZ' + b'\x00' * 100 + bytes.fromhex('BD04EFFE') + bytes.fromhex('00000100') + bytes.fromhex('07000100') + bytes.fromhex('00006800') + b'\x00' * 20)
+    assert system_info.get_file_version(str(program)) == '1.7.104.0'
+    (tmp_path / 'no_version.exe').write_bytes(b'MZ' + b'\x00' * 100)
+    assert system_info.get_file_version(str(tmp_path / 'no_version.exe')) is None
+    assert system_info.get_file_version(str(tmp_path / 'missing.exe')) is None
+
+    assert system_info.format_script_extender_version('0.2.2.6') == '2.2.6'
+    assert system_info.format_script_extender_version('1.7.104.0') == '1.7.104.0'
+    assert system_info.format_script_extender_version(None) is None
+    assert system_info.parse_os_release('NAME="Arch Linux"\nPRETTY_NAME="Arch Linux"\nID=arch\n') == 'Arch Linux'
+    assert system_info.parse_os_release('ID=arch\n') is None
+
+    # the game folder is not known
+    lines = dict(system_info.get_game_details(GameEnum.SKYRIM, None))
+    assert lines['Game'] == 'Skyrim' and 'unknown' in lines['Game version'] and lines['SKSE version'] == 'unknown'
+
+    # versions are read from the files in the game folder
+    for name in ('SkyrimSE.exe', 'skse64_1_7_104.dll', 'skse64_steam_loader.dll', 'skse64_loader.exe'):
+        (tmp_path / name).write_bytes(b'')
+    versions = {'SkyrimSE.exe': '1.7.104.0', 'skse64_1_7_104.dll': '0.2.3.1'}
+    monkeypatch.setattr(system_info, 'get_file_version', lambda path: versions.get(os.path.basename(path)))
+    details = system_info.get_game_details(GameEnum.SKYRIM, str(tmp_path))
+    assert ('Game version', '1.7.104.0') in details
+    assert ('SKSE version', '2.3.1 (skse64_1_7_104.dll)') in details
+    assert len(details) == 3 # the loaders are not listed as the script extender
+
+    info = system_info.get_system_info('0.17.0-alpha.1', GameEnum.SKYRIM, str(tmp_path), True)
+    labels = [label for label, _ in info]
+    for expected in ('Mantella version', 'Python version', 'OS', 'CPU arch', 'Game version', 'SKSE version', 'Started by'):
+        assert expected in labels
+    printed = system_info.format_system_info(info)
+    assert printed[0] == '=== Mantella starting ===' and set(printed[-1]) == {'='}
+    assert len({line.index(' : ') for line in printed[1:-1]}) == 1 # the values line up
