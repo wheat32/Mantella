@@ -220,7 +220,10 @@ EndEvent
 
 
 Event OnDying(Actor akKiller)
-    Debug.Notification(self.GetActorReference().getdisplayname() + " has died")
+    ; During a conversation between NPCs this is only shown if its messages are enabled in the mod menu
+    if conversation.IsPlayerInConversation() || repository.showNpcConversationMessages
+        Debug.Notification(self.GetActorReference().getdisplayname() + " has died")
+    endIf
     String selfName = self.GetActorReference().getdisplayname()
     String killerName = ""
 

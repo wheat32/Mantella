@@ -498,6 +498,8 @@ Function CleanupConversation()
     ; A reply that is still on its way must not continue a conversation that has been cleaned up
     _hasBeenStopped = true
     int i = 0
+    ; Asked before the participants are cleared: a conversation between NPCs ends quietly, unless its messages are enabled in the mod menu
+    bool showEndMessage = IsPlayerInConversation() || repository.showNpcConversationMessages
     ClearParticipants()
     ClearRepeatingMessage()
     _awaitingPushToTalk = false
@@ -518,7 +520,9 @@ Function CleanupConversation()
         ModEvent.Send(handle)
     endIf 
     MantellaVanillaDialogue.notifyConversationEnd()
-    Debug.Notification("Conversation ended.")  
+    If (showEndMessage)
+        Debug.Notification("Conversation ended.")
+    EndIf
     Stop()
 EndFunction
 
@@ -922,6 +926,8 @@ EndFunction
 Function RemoveActors(Actor[] actorsToRemove)
     PrintActorsArray("Actors to remove: ",actorsToRemove)
     Form[] actorsRemoved = Utility.CreateFormArray(0)
+    ; Asked before anyone is removed: in a conversation between NPCs the messages are only shown if they are enabled in the mod menu
+    bool showLeftMessages = IsPlayerInConversation() || repository.showNpcConversationMessages
     int i = 0
     While (i < actorsToRemove.Length)
         Actor actorInQuestion = actorsToRemove[i]
@@ -930,7 +936,9 @@ Function RemoveActors(Actor[] actorsToRemove)
             actorsRemoved[actorsRemoved.Length - 1] = actorInQuestion
             Participants.RemoveAddedForm(actorInQuestion)
             actorInQuestion.RemoveFromFaction(MantellaConversationParticipantsFaction)
-            Debug.Notification(actorInQuestion.GetDisplayName()+" left the conversation.")
+            If (showLeftMessages)
+                Debug.Notification(actorInQuestion.GetDisplayName()+" left the conversation.")
+            EndIf
         EndIf
         i += 1
     EndWhile

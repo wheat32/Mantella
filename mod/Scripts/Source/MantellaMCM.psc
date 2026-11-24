@@ -18,6 +18,7 @@ int property oid_pushToTalkEnabled auto
 int property oid_freeFlowUseNearest auto
 int property oid_freeFlowEnabled auto
 int property oid_showScreenshotMessages auto
+int property oid_showNpcConversationMessages auto
 int property oid_freeFlowDistance auto
 int property oid_freeFlowIncludeCreatures auto
 int property oid_awarenessMaxCharacters auto
@@ -123,7 +124,7 @@ string MantellaMCMcurrentPage
 ; Whenever a new repository value OR a new MCM setting is added, up the MCM version number returned by `ManatellaMCM.GetVersion()`
 ; and add the corresponding default value in 'MCMRepository.assignDefaultSettings' in a block corresponding to the version number like the examples
 int Function GetVersion()
-    Return 9
+    Return 10
 EndFunction
 
 event OnVersionUpdate(int a_version)
@@ -255,6 +256,8 @@ Event OnOptionHighlight (Int optionID)
 		SetInfoText("Free-flow conversations: walk up to an NPC (or look at them) and start talking while holding your push-to-talk key. If they are not in a conversation with you yet, they are brought into it, and they listen to what you say instead of greeting you. Needs Push-to-Talk to be enabled, and uses the Push-to-Talk Key under Controls. \nDefault: On")
 	elseIf optionID == oid_dumpDialogueOptions
 		SetInfoText("For development. Writes the game's own dialogue options of the character you were last looking at (or else the closest one) to Documents/My Games/Mantella/dialogue_options.txt, with the lines they would answer with.")
+	elseIf optionID == oid_showNpcConversationMessages
+		SetInfoText("Whether messages such as \"Starting conversation...\", \"Conversation ended.\", \"... has died\" and \"... left the conversation.\" are shown for conversations between NPCs that you are not part of (radiant dialogue). The messages of your own conversations are always shown. \nDefault: Off")
 	elseIf optionID == oid_showScreenshotMessages
 		SetInfoText("Whether the game's \"ScreenShot: File created\" message is shown during Mantella conversations. With Vision and Use Game Screenshots enabled in the Mantella UI, the game takes a screenshot for every response. Outside of conversations the message is always shown. \nDefault: Off")
 	elseIf optionID == oid_freeFlowUseNearest

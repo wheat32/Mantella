@@ -36,6 +36,7 @@ bool property pushToTalkEnabled auto
 bool property freeFlowUseNearest auto
 bool property freeFlowEnabled auto
 bool property showScreenshotMessages auto
+bool property showNpcConversationMessages auto
 float property freeFlowDistance auto
 bool property freeFlowIncludeCreatures auto
 int property awarenessMaxCharacters auto
@@ -136,6 +137,9 @@ endEvent
 ; and add the corresponding default value here in a block corresponding to the version number like the examples below
 ; Doing it like this will only assign the defaul values to settings that haven't been initialized prior.
 function assignDefaultSettings(int lastVersion, bool isFirstInit = false)
+    If (lastVersion < 10 || isFirstInit)
+        showNpcConversationMessages = false
+    EndIf
     If (lastVersion < 9 || isFirstInit)
         ; The push-to-talk key is set here, in the game, and reported to Mantella. V (47) by default.
         ; A key that was bound as the free-flow talk key in version 8 is carried over

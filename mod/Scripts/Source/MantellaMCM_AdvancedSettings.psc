@@ -12,6 +12,7 @@ function LeftColumn(MantellaMCM mcm, MantellaRepository Repository) global
     mcm.oid_restartMantellaExe = mcm.AddTextOption("Restart Mantella.exe", "")
 	mcm.oid_debugNPCselectMode = mcm.AddToggleOption("NPC Debug Select Mode", Repository.NPCdebugSelectModeEnabled)
     mcm.oid_showScreenshotMessages = mcm.AddToggleOption("Show Screenshot Messages", Repository.showScreenshotMessages)
+    mcm.oid_showNpcConversationMessages = mcm.AddToggleOption("Show NPC Conversation Messages", Repository.showNpcConversationMessages)
     mcm.oid_dumpDialogueOptions = mcm.AddTextOption("Dump Dialogue Options", "")
 endfunction
 
@@ -68,6 +69,9 @@ function OptionUpdate(MantellaMCM mcm, int optionID, MantellaRepository Reposito
 				Debug.MessageBox(count + " dialogue options of " + speaker.GetDisplayName() + " written to Documents/My Games/Mantella/dialogue_options.txt")
 			endIf
 		endIf
+	elseif optionID == mcm.oid_showNpcConversationMessages
+		Repository.showNpcConversationMessages =! Repository.showNpcConversationMessages
+		mcm.SetToggleOptionValue(optionID, Repository.showNpcConversationMessages)
 	elseif optionID == mcm.oid_showScreenshotMessages
 		Repository.showScreenshotMessages =! Repository.showScreenshotMessages
 		mcm.SetToggleOptionValue(optionID, Repository.showScreenshotMessages)
