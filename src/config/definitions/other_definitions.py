@@ -112,9 +112,21 @@ class OtherDefinitions:
     @staticmethod
     def get_save_console_logs_config_value() -> ConfigValue:
         description = """Save everything shown in the console to a separate file for each time Mantella is run.
-                        The files are saved to the `logs` folder next to config.ini (My Games/Mantella/logs/console_<date>_<time>.log). The newest 20 files are kept.
-                        Useful for debugging, as the regular logging.log file keeps growing across runs."""
+                        The files are saved to the `logs` folder next to config.ini (My Games/Mantella/logs/console_<date>_<time>.log).
+                        How much is kept is set by the two settings below, and the `Delete Saved Logs` button under the console at the bottom of this page removes all of them.
+                        Useful for debugging."""
         return ConfigValueBool("save_console_logs", "Save Console Logs", description, False)
+
+    @staticmethod
+    def get_console_log_max_size_config_value() -> ConfigValue:
+        description = """The size (in MB) the console log of a run can grow to.
+                        When it is reached, the file starts over and the part before it is kept as a second file, so a run takes up at most twice this size."""
+        return ConfigValueInt("console_log_max_size", "Console Log Size Limit (MB)", description, 10, 1, 1000, tags=[ConfigValueTag.share_row])
+
+    @staticmethod
+    def get_console_log_max_files_config_value() -> ConfigValue:
+        description = """How many runs of Mantella console logs are kept for. When there are more, the oldest are deleted."""
+        return ConfigValueInt("console_log_max_files", "Console Logs Kept", description, 20, 1, 1000, tags=[ConfigValueTag.share_row])
 
     @staticmethod
     def get_advanced_logs_config_value() -> ConfigValue:

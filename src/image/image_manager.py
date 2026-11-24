@@ -34,7 +34,8 @@ class ImageManager:
                  resize_method: str,
                  capture_offset: dict[str, int],
                  use_game_screenshots: bool,
-                 game_image_path: str | None) -> None:
+                 game_image_path: str | None,
+                 use_frame_capture: bool = False) -> None:
 
         WINDOW_TITLES = {
             GameEnum.SKYRIM: 'Skyrim Special Edition',
@@ -73,6 +74,10 @@ class ImageManager:
         self.__capture_params = None
         self.__has_black_screenshot_warning_happened: bool = False
         self.__has_game_screenshot_warning_happened: bool = False
+        # Experimental (Skyrim): the SKSE_HTTP plugin copies the frame instead of the game taking a screenshot of itself
+        self.__use_frame_capture: bool = use_frame_capture
+        self.__frame_capture_file_path: str = str(Path(save_folder) / 'data' / 'tmp' / self.FRAME_CAPTURE_FILE_NAME)
+        self.__has_frame_capture_warning_happened: bool = False
         self.__is_skyrim: bool = game.base_game == GameEnum.SKYRIM
         # Fallout 4: the mod saves a screenshot for Mantella to pick up.
         # Skyrim: Mantella presses the game's own screenshot key and picks up the file the game saves to its folder
@@ -258,9 +263,76 @@ class ImageManager:
         time.sleep(0.05)
         user32.keybd_event(VK_SNAPSHOT, DIK_SYSRQ, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0)
 
+    # Shared with the SKSE_HTTP plugin (skse/SKSE_HTTP/src/FrameCapture.cpp)
+    FRAME_CAPTURE_EVENT_NAME = 'Local\\MantellaCaptureFrame'
+    FRAME_CAPTURE_FILE_NAME = 'mantella_frame.bmp'
+
+    @staticmethod
+    def _request_frame_capture() -> bool:
+        """Asks the SKSE_HTTP plugin to save the frame the game is showing
+
+        Returns:
+            bool: False if the plugin cannot be reached (an older SKSE_HTTP.dll, or the game is not running)
+        """
+        EVENT_MODIFY_STATE = 0x0002
+        kernel32 = ctypes.windll.kernel32
+        kernel32.OpenEventW.restype = ctypes.c_void_p
+        kernel32.OpenEventW.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_wchar_p]
+        kernel32.SetEvent.argtypes = [ctypes.c_void_p]
+        kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+        handle = kernel32.OpenEventW(EVENT_MODIFY_STATE, 0, ImageManager.FRAME_CAPTURE_EVENT_NAME)
+        if not handle:
+            return False
+        try:
+            return bool(kernel32.SetEvent(handle))
+        finally:
+            kernel32.CloseHandle(handle)
+
+    def __warn_about_frame_capture(self, reason: str) -> None:
+        if not self.__has_frame_capture_warning_happened:
+            self.__has_frame_capture_warning_happened = True
+            logger.warning(f'`Fast Game Screenshots` did not work ({reason}), so the game\'s own screenshot is used instead. If this keeps happening, disable `Vision`->`Fast Game Screenshots (Experimental)` in the Mantella UI')
+
+    @utils.time_it
+    def _capture_skyrim_frame(self, timeout: float = 1.5) -> tuple[np.ndarray, int, int] | None:
+        '''Experimental: has the SKSE_HTTP plugin copy the frame the game is showing, and loads it.
+        Unlike the game's own screenshot (see _take_skyrim_screenshot) this does not make the game freeze for a moment
+
+        Returns:
+            The frame as a numpy array with its width and height, or None if it could not be captured
+        '''
+        try:
+            if os.path.exists(self.__frame_capture_file_path):
+                os.remove(self.__frame_capture_file_path) # left over from an earlier request that came too late
+            if not self._request_frame_capture():
+                self.__warn_about_frame_capture('the SKSE_HTTP plugin of the running game does not offer it')
+                return None
+
+            frame = None
+            deadline = time.time() + timeout
+            while time.time() < deadline and frame is None:
+                time.sleep(0.02)
+                if os.path.exists(self.__frame_capture_file_path):
+                    frame = cv2.imread(self.__frame_capture_file_path)
+            if frame is None:
+                self.__warn_about_frame_capture(f'no frame was saved to "{to_host_path(self.__frame_capture_file_path)}" in time')
+                return None
+            try:
+                os.remove(self.__frame_capture_file_path)
+            except OSError as e:
+                logger.debug(f'Could not remove captured frame: {e}')
+            if self._is_blank(frame):
+                self.__warn_about_frame_capture('the captured frame is blank')
+                return None
+            height, width = frame.shape[:2]
+            return np.array(frame), width, height
+        except Exception as e:
+            self.__warn_about_frame_capture(str(e))
+            return None
+
     @utils.time_it
     def _take_skyrim_screenshot(self, timeout: float = 2.0) -> tuple[np.ndarray, int, int] | None:
-        '''Has Skyrim take a screenshot of itself and loads it, removing the file afterwards.
+        '''Has Skyrim take a screenshot of itself and loads it, removing the file afterward.
         Unlike capturing the game window from the outside, this also works where the window cannot be captured (eg under Wine / Proton)
 
         Returns:
@@ -321,7 +393,9 @@ class ImageManager:
         try:
             # Capture
             if self.__use_game_screenshots and self.__is_skyrim and self.__game_folder:
-                captured = self._take_skyrim_screenshot()
+                captured = self._capture_skyrim_frame() if self.__use_frame_capture else None
+                if captured is None:
+                    captured = self._take_skyrim_screenshot()
                 if captured is None:
                     return None
                 screenshot, width, height = captured

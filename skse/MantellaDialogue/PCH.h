@@ -19,27 +19,31 @@
 #include <array>
 
 #ifdef SKYRIM_AE
-    #define OFFSET(se, ae) ae
+#define OFFSET(se, ae) ae
 #else
-    #define OFFSET(se, ae) se
+#define OFFSET(se, ae) se
 #endif
 
 // Address Library
 
 namespace stl
 {
-    using namespace SKSE::stl;
+using namespace SKSE::stl;
 
-    template <class T>
-    void write_thunk_call(std::uintptr_t a_src)
-    {
-        auto& trampoline = SKSE::GetTrampoline();
-        SKSE::AllocTrampoline(64);
-        T::func = trampoline.write_call<5>(a_src, T::thunk);
-    }
+namespace Detail
+{
+constexpr std::size_t TRAMPOLINE_ALLOC_SIZE = 64;
+constexpr std::size_t CALL_INSTRUCTION_SIZE = 5;
+} // namespace Detail
+
+template <class T>
+void write_thunk_call(std::uintptr_t a_src)
+{
+    SKSE::Trampoline& trampoline = SKSE::GetTrampoline();
+    SKSE::AllocTrampoline(Detail::TRAMPOLINE_ALLOC_SIZE);
+    T::func = trampoline.write_call<Detail::CALL_INSTRUCTION_SIZE>(a_src, T::thunk);
 }
-
-
+} // namespace stl
 
 using namespace std::literals;
 using namespace SKSE::log;

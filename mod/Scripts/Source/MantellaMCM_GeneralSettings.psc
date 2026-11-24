@@ -11,6 +11,7 @@ function LeftColumn(MantellaMCM mcm, MantellaRepository Repository) global
     mcm.AddHeaderOption("Microphone")
     mcm.oid_microphoneEnabledToggle = mcm.AddToggleOption("Enabled", repository.microphoneEnabled)
     mcm.oid_useHotkeyToStartMic = mcm.AddToggleOption("Use Hotkey to Start Mic", repository.useHotkeyToStartMic)
+    mcm.oid_pushToTalkEnabled = mcm.AddToggleOption("Push-to-Talk", repository.pushToTalkEnabled)
     mcm.oid_responsetimeslider = mcm.AddSliderOption("Text Response Wait Time", repository.MantellaEffectResponseTimer)
     mcm.oid_showReminderMessages = mcm.AddToggleOption("Show Input Reminder Messages", repository.showReminderMessages)
 
@@ -20,7 +21,7 @@ function LeftColumn(MantellaMCM mcm, MantellaRepository Repository) global
     mcm.oid_keymapEndHotkey = mcm.AddKeyMapOption("End Conversation / Remove NPC", repository.MantellaEndHotkey)
     mcm.oid_keymapToggleHotkey = mcm.AddKeyMapOption("Toggle NPC in Conversation", repository.MantellaToggleHotkey)
     mcm.oid_keymapEndConversationHotkey = mcm.AddKeyMapOption("End Conversation", repository.MantellaEndConversationHotkey)
-    mcm.oid_keymapFreeFlowHotkey = mcm.AddKeyMapOption("Free-flow Talk Key", repository.MantellaFreeFlowHotkey)
+    mcm.oid_keymapPushToTalkHotkey = mcm.AddKeyMapOption("Push-to-Talk Key", repository.MantellaPushToTalkHotkey)
     mcm.oid_keymapCustomGameEventHotkey = mcm.AddKeyMapOption("Add Custom Game Event", repository.MantellaCustomGameEventHotkey)
     mcm.oid_keymapRadiantHotkey = mcm.AddKeyMapOption("Toggle Radiant Dialogue", repository.MantellaRadiantHotkey) 
 endfunction
@@ -35,6 +36,7 @@ function RightColumn(MantellaMCM mcm, MantellaRepository Repository) global
     mcm.oid_showRadiantDialogueMessages = mcm.AddToggleOption("Show Debug Messages", repository.showRadiantDialogueMessages)
 
     mcm.AddHeaderOption("Free-flow Conversations")
+    mcm.oid_freeFlowEnabled = mcm.AddToggleOption("Free-flow Conversations", repository.freeFlowEnabled)
     mcm.oid_freeFlowUseNearest = mcm.AddToggleOption("Talk to Nearest Character", repository.freeFlowUseNearest)
     mcm.oid_freeFlowDistance = mcm.AddSliderOption("Nearest Character Distance", repository.freeFlowDistance)
     mcm.oid_freeFlowIncludeCreatures = mcm.AddToggleOption("Nearest Can Be a Creature", repository.freeFlowIncludeCreatures)
@@ -121,7 +123,7 @@ endfunction
 
 function KeyMapChange(MantellaMCM mcm,Int option, Int keyCode, String conflictControl, String conflictName, MantellaRepository Repository) global
     ;This script is used to check if a key is already used, if it's not it will update to a new value (stored in MantellaRepository) or it will prompt the user to warn him of the conflict. The actual keybind happens in MantellaRepository
-    bool isOptionHotkey = option == mcm.oid_keymapStartAddHotkey || option == mcm.oid_keymapPromptHotkey || option == mcm.oid_keymapCustomGameEventHotkey || option == mcm.oid_keymapEndHotkey || option == mcm.oid_keymapToggleHotkey || option == mcm.oid_keymapEndConversationHotkey || option == mcm.oid_keymapFreeFlowHotkey || option == mcm.oid_keymapRadiantHotkey
+    bool isOptionHotkey = option == mcm.oid_keymapStartAddHotkey || option == mcm.oid_keymapPromptHotkey || option == mcm.oid_keymapCustomGameEventHotkey || option == mcm.oid_keymapEndHotkey || option == mcm.oid_keymapToggleHotkey || option == mcm.oid_keymapEndConversationHotkey || option == mcm.oid_keymapPushToTalkHotkey || option == mcm.oid_keymapRadiantHotkey
     if (isOptionHotkey)
         Bool continue = true
         ;below checks if there's already a bound key
@@ -147,8 +149,8 @@ function KeyMapChange(MantellaMCM mcm,Int option, Int keyCode, String conflictCo
                 repository.BindToggleHotkey(keyCode)
             elseIf option == mcm.oid_keymapEndConversationHotkey
                 repository.BindEndConversationHotkey(keyCode)
-            elseIf option == mcm.oid_keymapFreeFlowHotkey
-                repository.BindFreeFlowHotkey(keyCode)
+            elseIf option == mcm.oid_keymapPushToTalkHotkey
+                repository.BindPushToTalkHotkey(keyCode)
             elseIf option == mcm.oid_keymapCustomGameEventHotkey
                 repository.BindCustomGameEventHotkey(keyCode)
             elseIf option == mcm.oid_keymapRadiantHotkey
@@ -163,6 +165,10 @@ function OptionUpdate(MantellaMCM mcm, int optionID, MantellaRepository Reposito
     if optionID == mcm.oid_microphoneEnabledToggle
         Repository.microphoneEnabled =! Repository.microphoneEnabled
         mcm.SetToggleOptionValue(mcm.oid_microphoneEnabledToggle, Repository.microphoneEnabled)
+    elseif optionID == mcm.oid_pushToTalkEnabled
+        Repository.pushToTalkEnabled =! Repository.pushToTalkEnabled
+        mcm.SetToggleOptionValue(optionID, Repository.pushToTalkEnabled)
+        (Quest.GetQuest("MantellaConversation") as MantellaConversation).SendPushToTalkSettings()
     elseif optionID == mcm.oid_useHotkeyToStartMic
         Repository.useHotkeyToStartMic =! Repository.useHotkeyToStartMic
         mcm.SetToggleOptionValue(mcm.oid_useHotkeyToStartMic, Repository.useHotkeyToStartMic)
@@ -178,6 +184,9 @@ function OptionUpdate(MantellaMCM mcm, int optionID, MantellaRepository Reposito
     elseIf optionID == mcm.oid_radiantenabled
         repository.radiantEnabled =! repository.radiantEnabled
         mcm.SetToggleOptionValue(mcm.oid_radiantenabled, repository.radiantEnabled)
+    elseIf optionID == mcm.oid_freeFlowEnabled
+        repository.freeFlowEnabled =! repository.freeFlowEnabled
+        mcm.SetToggleOptionValue(optionID, repository.freeFlowEnabled)
     elseIf optionID == mcm.oid_freeFlowUseNearest
         repository.freeFlowUseNearest =! repository.freeFlowUseNearest
         mcm.SetToggleOptionValue(optionID, repository.freeFlowUseNearest)

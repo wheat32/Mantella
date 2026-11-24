@@ -180,7 +180,7 @@ string Function FormatDistance(float gameUnits)
         return "almost a day's walk"
     elseif walkTime < 6.0
         return "about a day's walk"
-    ; Gradually dramatise longer distances
+    ; Gradually dramatize longer distances
     elseif walkTime < 10.0
         return "about two days by foot, or almost a day on horseback"
     elseif walkTime < 14.0

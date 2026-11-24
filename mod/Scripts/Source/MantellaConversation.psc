@@ -43,6 +43,7 @@ string lineToSpeakError = "Error: No line transmitted for actor to speak"
 bool microphoneEnabledLastKnownStatus = false
 Actor[] _cachedNearbyActors = None
 bool _playerSpeaksFirst = false
+bool _awaitingPushToTalk = false
 bool _waitingForActionResponse = true
 int _actionResponseTimeout = 0
 bool _playerInputPending = false
@@ -84,6 +85,9 @@ EndFunction
 function StartConversation(Actor[] actorsToStartConversationWith)
     int handle = SKSE_HTTP.createDictionary()
     SKSE_HTTP.setString(handle, mConsts.KEY_REQUESTTYPE, mConsts.KEY_REQUESTTYPE_INIT)
+    ; push-to-talk is set up in the game's mod menu, and Mantella listens for the key (also part of the start request below)
+    SKSE_HTTP.setBool(handle, mConsts.KEY_PTT_ENABLED, repository.pushToTalkEnabled)
+    SKSE_HTTP.setInt(handle, mConsts.KEY_PTT_KEYCODE, repository.MantellaPushToTalkHotkey)
     ; send request to initialize Mantella settings (set LLM connection, start up TTS service, load character_df etc) 
     ; while waiting for actor info and context to be prepared below
     SKSE_HTTP.sendLocalhostHttpRequest(handle, repository.HttpPort, mConsts.HTTP_ROUTE_MAIN)
@@ -181,15 +185,18 @@ endEvent
 
 function ContinueConversation(string nextAction, int handle)
     ; Debug.Notification(nextAction)
+    _awaitingPushToTalk = false
     if(nextAction == mConsts.KEY_REPLYTTYPE_STARTCONVERSATIONCOMPLETED)
         _hasBeenStopped = false
+        ; With game screenshots enabled in Mantella, the game takes a screenshot for every response and reports each one
+        SKSE_HTTP.SetScreenshotMessageVisible(repository.showScreenshotMessages)
         if(SKSE_HTTP.hasKey(handle,mConsts.KEY_STARTCONVERSATION_USENARRATOR))
             _useNarrator = SKSE_HTTP.getBool(handle, mConsts.KEY_STARTCONVERSATION_USENARRATOR, false)
         endif
         ;Debug.Notification("Conversation started.")
         RequestContinueConversation()
     elseIf(nextAction == mConsts.KEY_REPLYTYPE_NPCTALK)
-        ; Debug.Trace((Utility.GetCurrentRealTime() - httpReceivedTime) + " seconds to realise NPC needs to respond", 2)
+        ; Debug.Trace((Utility.GetCurrentRealTime() - httpReceivedTime) + " seconds to realize NPC needs to respond", 2)
         If (_playerInputPending)
             ; A new response is starting after player input: make sure nothing from the previous response is still playing
             _playerInputPending = false
@@ -213,16 +220,16 @@ function ContinueConversation(string nextAction, int handle)
     elseIf (nextAction == mConsts.KEY_REPLYTYPE_INTERRUPTED)
         ; The player talked over the current line: follow up with a player input request.
         ; The current voiceline is not stopped here. Instead, it is cut just before the new response 
-        ; starts to minimise the silence gap (and latency perception) between the old and new voiceline.
+        ; starts to minimize the silence gap (and latency perception) between the old and new voiceline.
         ClearRepeatingMessage()
         ; With push-to-talk the interruption is deliberate (a key press, not noise picked up by an open mic),
-        ; in which case Mantella asks for the NPC to stop talking straight away
+        ; in which case Mantella asks for the NPC to stop talking right away
         If (SKSE_HTTP.getBool(handle, "mantella_stop_voiceline", false))
             StopCurrentVoiceline()
         EndIf
         ; The context is rebuilt: sending the previous one again would repeat in-game events Mantella has already been told about
         sendRequestForPlayerInput("", updateContext=True)
-        ShowRepeatingMessage("Listening...")
+        ShowListeningMessage()
     elseIf(nextAction == mConsts.KEY_REPLYTYPE_NPCACTION)
         int npcActionHandle = SKSE_HTTP.getNestedDictionary(handle, mConsts.KEY_REPLYTYPE_NPCACTION)
         ProcessNpcAction(npcActionHandle)
@@ -493,6 +500,8 @@ Function CleanupConversation()
     int i = 0
     ClearParticipants()
     ClearRepeatingMessage()
+    _awaitingPushToTalk = false
+    SKSE_HTTP.SetScreenshotMessageVisible(true)
     _ingameEvents = None
     _does_accept_player_input = false
     _isTalking = false
@@ -559,7 +568,7 @@ function sendRequestForVoiceTranscribe()
     endif
 
     sendRequestForPlayerInput("", updateContext=True)
-    ShowRepeatingMessage("Listening...")
+    ShowListeningMessage()
 endFunction
 
 function GetPlayerTextInput()
@@ -1197,6 +1206,39 @@ Function ShowRepeatingMessage(string messageToShow)
     if repository.showReminderMessages
         RegisterForSingleUpdate(10)
     endIf
+EndFunction
+
+; Tells the player that Mantella is listening to the microphone. With push-to-talk enabled in Mantella, it only listens
+; while the key is held, so the message is shown when the key is pressed instead of right away
+Function ShowListeningMessage()
+    If (repository.pushToTalkEnabled && repository.MantellaPushToTalkHotkey > 0)
+        _awaitingPushToTalk = true
+        If (Input.IsKeyPressed(repository.MantellaPushToTalkHotkey))
+            Debug.Notification("Listening...")
+        EndIf
+    Else
+        ShowRepeatingMessage("Listening...")
+    EndIf
+EndFunction
+
+; Called when the push-to-talk key is pressed outside of menus
+Function OnPushToTalkPressed()
+    If (_awaitingPushToTalk)
+        Debug.Notification("Listening...")
+    EndIf
+EndFunction
+
+; Tells Mantella about push-to-talk after it has been changed in the mod menu. During a conversation this would
+; interrupt Mantella while it waits for the player to speak, so the change is then passed on when the next conversation starts
+Function SendPushToTalkSettings()
+    If (IsRunning())
+        return
+    EndIf
+    int handle = SKSE_HTTP.createDictionary()
+    SKSE_HTTP.setString(handle, mConsts.KEY_REQUESTTYPE, mConsts.KEY_REQUESTTYPE_INIT)
+    SKSE_HTTP.setBool(handle, mConsts.KEY_PTT_ENABLED, repository.pushToTalkEnabled)
+    SKSE_HTTP.setInt(handle, mConsts.KEY_PTT_KEYCODE, repository.MantellaPushToTalkHotkey)
+    SKSE_HTTP.sendLocalhostHttpRequest(handle, repository.HttpPort, mConsts.HTTP_ROUTE_MAIN)
 EndFunction
 
 Function ClearRepeatingMessage()

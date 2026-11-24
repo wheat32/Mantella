@@ -20,4 +20,4 @@ class LanguageDefinitions:
 
     @staticmethod
     def get_collecting_thoughts_npc_response() -> ConfigValue:
-        return ConfigValueString("collecting_thoughts_npc_response", "NPC Response: Collecting Thoughts","The response the NPC gives when they need to summarise the conversation because the maximum token count has been reached.","I need to gather my thoughts for a moment", tags=[ConfigValueTag.advanced,ConfigValueTag.share_row])
+        return ConfigValueString("collecting_thoughts_npc_response", "NPC Response: Collecting Thoughts","The response the NPC gives when they need to summarize the conversation because the maximum token count has been reached.","I need to gather my thoughts for a moment", tags=[ConfigValueTag.advanced,ConfigValueTag.share_row])

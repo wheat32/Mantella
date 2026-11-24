@@ -60,6 +60,8 @@ Int function valueType(Int object, String key) global native
 
 Function TakeScreenshot() global native
 Function RenameScreenshot(String filename) global native
+; Hides or shows the game's "ScreenShot: File '...' created." message
+Function SetScreenshotMessageVisible(Bool visible) global native
 VoiceType Function GetVoiceType(Actor actor) global native
 Function SetVoiceType(Actor actor, VoiceType voice) global native
 VoiceType Function GetRaceDefaultVoiceType(Actor actor) global native

@@ -34,6 +34,8 @@ string property KEY_REQUESTTYPE_PLAYERINPUT = "mantella_player_input" auto
 string property KEY_REQUESTTYPE_ENDCONVERSATION = "mantella_end_conversation" auto
 
 string property KEY_REPLYTTYPE_INITCOMPLETED = "mantella_init_completed" auto
+string property KEY_PTT_ENABLED = "mantella_ptt_enabled" auto
+string property KEY_PTT_KEYCODE = "mantella_ptt_key_code" auto
 string property KEY_REPLYTTYPE_STARTCONVERSATIONCOMPLETED = "mantella_start_conversation_completed" auto
 
 string property KEY_REPLYTYPE_NPCTALK = "mantella_npc_talk" auto

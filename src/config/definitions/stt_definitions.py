@@ -50,13 +50,16 @@ class STTDefinitions:
 
     @staticmethod
     def get_ptt_enabled_config_value() -> ConfigValue:
-        description = """When enabled, speech is only captured while the PTT hotkey is held."""
-        return ConfigValueBool("ptt_enabled", "Push-to-Talk", description, False, tags=[ConfigValueTag.advanced,ConfigValueTag.share_row])
+        # Push-to-talk is set up in the game's mod menu (Skyrim), which reports it to Mantella. This setting is only used by games that do not report it
+        description = """When enabled, speech is only captured while the push-to-talk key is held.
+                        In Skyrim this setting is not used: push-to-talk is switched on and its key is set in the General page of Mantella's mod menu in the game."""
+        return ConfigValueBool("ptt_enabled", "Push-to-Talk", description, False, is_hidden=True, tags=[ConfigValueTag.advanced])
 
     @staticmethod
     def get_ptt_hotkey_config_value() -> ConfigValue:
+        # See get_ptt_enabled_config_value: the key that is used until the game has reported its key
         description = """Examples: V, SPACE, ENTER, F1..F12."""
-        return ConfigValueString("ptt_hotkey", "Push-to-Talk Hotkey", description, "V", tags=[ConfigValueTag.advanced,ConfigValueTag.share_row])
+        return ConfigValueString("ptt_hotkey", "Push-to-Talk Hotkey", description, "V", is_hidden=True, tags=[ConfigValueTag.advanced])
     
     @staticmethod
     def get_instant_interruption_config_value() -> ConfigValue:

@@ -16,6 +16,7 @@ from src.llm.summary_client import SummaryLLMClient
 from src.game_manager import GameStateManager
 from src.http.routes.routeable import routeable
 from src.http.communication_constants import communication_constants as comm_consts
+from src.stt.ptt_controller import PTTController
 from src.tts.ttsable import TTSable
 from src.tts.tts_factory import create_tts
 from src import utils
@@ -101,6 +102,24 @@ class mantella_route(routeable):
             # Handling them in a worker thread keeps the rest of the server (eg the settings UI) responsive in the meantime
             return await run_in_threadpool(self._handle_request, received_json)
 
+    def __apply_game_push_to_talk(self, received_json: dict[str, Any] | None) -> None:
+        """Push-to-talk is switched on and its key is set in the game's mod menu. The game sends both along when a conversation
+        starts and when they are changed"""
+        if not received_json or not self.__game:
+            return
+        reported_enabled = received_json.get(comm_consts.KEY_PTT_ENABLED)
+        reported_key = PTTController.get_key_name(received_json.get(comm_consts.KEY_PTT_KEYCODE))
+        if not isinstance(reported_enabled, bool) and not reported_key:
+            return # a game that does not report push-to-talk (eg Fallout 4): the settings of the Mantella UI apply
+        saved_enabled, saved_key = PTTController.load_saved_settings(self._config.save_folder, self._config.ptt_enabled, self._config.ptt_hotkey)
+        enabled = reported_enabled if isinstance(reported_enabled, bool) else saved_enabled
+        key = reported_key or saved_key
+        if (enabled, key) != (saved_enabled, saved_key):
+            PTTController.save_settings(self._config.save_folder, enabled, key)
+            logger.log(24, f"Push-to-talk set by the game: {'on' if enabled else 'off'}, key {key}")
+        # applied every time: a listener created after a change of settings starts from the saved settings, which are the same
+        self.__game.set_push_to_talk(enabled, key)
+
     def _handle_request(self, received_json: dict[str, Any] | None) -> dict[str, Any]:
         # The game's requests are processed strictly one after the other. A request that is waiting for the player to speak
         # can hold things up indefinitely (with push-to-talk: until the key is pressed), so requests that end or (re)start
@@ -122,6 +141,7 @@ class mantella_route(routeable):
                 error_message = "Game manager setup failed. There is most likely an issue with the config.ini."
                 logger.error(error_message)
                 return self.error_message(error_message)
+            self.__apply_game_push_to_talk(received_json)
             reply = {}
             if received_json:
                 logger.debug('Processing request...')

@@ -149,7 +149,8 @@ If you have trouble installing the xVASynth version from Nexus, try installing i
                         - http://{public-ip}:{external-port} when running XTTS in a RunPod GPU pod. 
                           In the pod menu, go to the Connect tab -> Direct TCP ports, 
                           {public-ip} and {external-port} can be found in the section 
-                          `Streaming Capable -> {public-ip}:{external-port} -> :8021`"""
+                          `Streaming Capable -> {public-ip}:{external-port} -> :8021`
+                        The `Test` button checks whether an XTTS server answers at the URL typed in here."""
         return ConfigValueString("xtts_url","XTTS URL",description, "http://127.0.0.1:8020",tags=[ConfigValueTag.advanced])
     
     @staticmethod

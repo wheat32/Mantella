@@ -201,7 +201,7 @@ def _sounds_like(candidate: str, name: str) -> bool:
     return SequenceMatcher(None, candidate, name).ratio() >= 0.75
 
 
-class ListeningCancelled(Exception):
+class ListeningCanceled(Exception):
     """Raised to whoever is waiting for the player to speak when that wait is called off (eg because the conversation is being ended)"""
 
 
@@ -245,8 +245,9 @@ class Transcriber:
         logger.log(self.loglevel, f"Audio threshold set to {self.audio_threshold}. If the mic is not picking up your voice, try lowering this `Speech-to-Text`->`Audio Threshold` value in the Mantella UI. If the mic is picking up too much background noise, try increasing this value.\n")
 
         # PTT settings
-        self.ptt_enabled = config.ptt_enabled
-        self._ptt = PTTController(config.ptt_hotkey if self.ptt_enabled else None)
+        # Push-to-talk is set up in the game's mod menu, which reports it to Mantella (see set_push_to_talk)
+        self.ptt_enabled, ptt_key = PTTController.load_saved_settings(config.save_folder, config.ptt_enabled, config.ptt_hotkey)
+        self._ptt = PTTController(ptt_key if self.ptt_enabled else None)
         self._ptt_active = False
 
         self.__audio_input_error_count = 0
@@ -579,12 +580,8 @@ If you would prefer to run speech-to-text locally, please ensure the `Speech-to-
         while self._running:
             try:
                 chunk, status = self._audio_queue.get(timeout=0.1)
-                if status:
-                    if self.__processing_audio_error_count % self.__warning_frequency == 0:
-                        logger.log(23, f"STT WARNING: Processing audio error: {status}")
-                    self.__processing_audio_error_count += 1
-                    # The status only reports that earlier audio was lost (eg an input overflow). The chunk itself is still valid,
-                    # and dropping it would cut even more out of the player's speech
+                # A status only reports that earlier audio was lost (eg an input overflow), and is logged where the audio comes in
+                # (see _create_input_callback). The chunk itself is still valid, and dropping it would cut even more out of the player's speech
 
                 with self._lock:
                     if self.ptt_enabled:
@@ -597,7 +594,7 @@ If you would prefer to run speech-to-text locally, please ensure the `Speech-to-
                 continue
             except Exception as e:
                 if self.__mic_input_process_error_count % self.__warning_frequency == 0:
-                    logger.log(23, f'STT WARNING: Error processing mic input: {str(e)}')
+                    logger.warning(f'Error processing mic input: {str(e)}')
                 self.__mic_input_process_error_count += 1
                 self._reset_state()
                 time.sleep(0.1)
@@ -727,9 +724,14 @@ If you would prefer to run speech-to-text locally, please ensure the `Speech-to-
         """Create callback for audio input stream."""
         def input_callback(indata, frames, time, status):
             if status:
-                if self.__audio_input_error_count % self.__warning_frequency == 0:
-                    logger.log(23, f"STT WARNING: Audio input error: {status}")
-                self.__audio_input_error_count += 1
+                if 'overflow' in str(status).lower():
+                    # The microphone delivered audio faster than it was picked up for a moment (eg while the game was loading).
+                    # A fraction of a second of audio is lost, which is harmless and not worth a warning
+                    logger.debug(f'Audio input overflow: {status}')
+                else:
+                    if self.__audio_input_error_count % self.__warning_frequency == 0:
+                        logger.warning(f'Audio input error: {status}')
+                    self.__audio_input_error_count += 1
             # Store both data and status in queue
             q.put((indata.copy().flatten(), status))
         return input_callback
@@ -783,7 +785,7 @@ If you would prefer to run speech-to-text locally, please ensure the `Speech-to-
                 with self._lock:
                     if not self._current_transcription:
                         self._transcription_ready.clear()
-                raise ListeningCancelled()
+                raise ListeningCanceled()
             
             if not received_transcription and use_timeout and not self._speech_detected:
                 logger.log(self.loglevel, f"Silence timeout of {silence_timeout} seconds reached without speech")
@@ -816,6 +818,21 @@ If you would prefer to run speech-to-text locally, please ensure the `Speech-to-
     # With free-flow conversations, the player starts a conversation by simply talking to an NPC while holding the
     # push-to-talk key. The conversation only exists a moment later, so what is said in the meantime is recorded here
     # and handed to the conversation when it starts listening.
+
+    def set_push_to_talk(self, enabled: bool, key: str) -> None:
+        """Switches push-to-talk on or off and sets its key, as reported by the game.
+        Switching it on or off is left for later while the microphone is being listened to"""
+        if enabled != self.ptt_enabled:
+            if self._running:
+                logger.debug('Push-to-talk will be switched once the microphone is no longer in use')
+                return
+            if not enabled:
+                self.stop_idle_capture()
+            self.ptt_enabled = enabled
+            self._ptt_active = False
+        self._ptt.update_key(key if self.ptt_enabled else None)
+        if self.ptt_enabled:
+            self.start_idle_capture()
 
     def start_idle_capture(self) -> None:
         """Starts recording push-to-talk input while no conversation is listening for it"""
@@ -904,7 +921,7 @@ If you would prefer to run speech-to-text locally, please ensure the `Speech-to-
                 self._audio_buffer = np.array([], dtype=np.float32)
 
     def cancel_waiting(self) -> None:
-        """Wakes up a call to get_latest_transcription that is waiting for the player to speak, making it raise ListeningCancelled.
+        """Wakes up a call to get_latest_transcription that is waiting for the player to speak, making it raise ListeningCanceled.
         With push-to-talk that wait would otherwise only end once the player presses the key and says something"""
         self._cancel_waiting.set()
         self._transcription_ready.set()

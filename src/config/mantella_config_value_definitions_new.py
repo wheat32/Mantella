@@ -145,6 +145,7 @@ class MantellaConfigValueDefinitionsNew:
         vision_category.add_config_value(VisionDefinitions.get_vision_custom_token_count_config_value())
         vision_category.add_config_value(VisionDefinitions.get_vision_llm_params_config_value())
         vision_category.add_config_value(VisionDefinitions.get_use_game_screenshots_config_value())
+        vision_category.add_config_value(VisionDefinitions.get_use_frame_capture_config_value())
         result.add_base_group(vision_category)
 
         actions_category = ConfigValueGroup("Actions", "Actions", "Settings for in-game actions.", on_value_change_callback)
@@ -209,6 +210,8 @@ class MantellaConfigValueDefinitionsNew:
         other_category.add_config_value(OtherDefinitions.get_port_config_value())
         other_category.add_config_value(OtherDefinitions.get_show_http_debug_messages_config_value())
         other_category.add_config_value(OtherDefinitions.get_save_console_logs_config_value())
+        other_category.add_config_value(OtherDefinitions.get_console_log_max_size_config_value())
+        other_category.add_config_value(OtherDefinitions.get_console_log_max_files_config_value())
         other_category.add_config_value(OtherDefinitions.get_advanced_logs_config_value())
         other_category.add_config_value(OtherDefinitions.get_enable_telemetry_config_value())
         other_category.add_config_value(OtherDefinitions.get_telemetry_otlp_endpoint_config_value())

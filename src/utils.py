@@ -574,3 +574,13 @@ def get_model_token_limits():
         'llama-3-70b-instruct:nitro': 8_192,
     }
     return token_limit_dict
+
+
+def get_name_without_number(name: str) -> str:
+    """The game numbers characters that share a name within a conversation ("Bandit", "Bandit 2").
+
+    Returns:
+        str: the name without such a number ("Bandit 2" -> "Bandit"). Names that are not numbered are returned as they are
+    """
+    stripped = re.sub(r'\s+\d+$', '', name)
+    return stripped if stripped else name

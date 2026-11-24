@@ -8,18 +8,25 @@
 
 namespace logger = SKSE::log;
 
-void SetupLog() {
-    auto logsFolder = SKSE::log::log_directory();
-    if (!logsFolder) SKSE::stl::report_and_fail("SKSE log_directory not provided, logs disabled.");
-    auto pluginName = "MantellaDialogue";
-    auto logFilePath = *logsFolder / std::format("{}.log", pluginName);
+void SetupLog()
+{
+    std::optional<std::filesystem::path> logsFolder = SKSE::log::log_directory();
+    if (logsFolder.has_value() == false)
+    {
+        SKSE::stl::report_and_fail("SKSE log_directory not provided, logs disabled.");
+    }
+    const char* pluginName = "MantellaDialogue";
+    std::filesystem::path logFilePath = *logsFolder / std::format("{}.log", pluginName);
     auto fileLoggerPtr = std::make_shared<spdlog::sinks::basic_file_sink_mt>(logFilePath.string(), true);
     std::shared_ptr<spdlog::logger> loggerPtr;
-    if (IsDebuggerPresent()) {
+    if (IsDebuggerPresent())
+    {
         auto debugLoggerPtr = std::make_shared<spdlog::sinks::msvc_sink_mt>();
         spdlog::sinks_init_list loggers{std::move(fileLoggerPtr), std::move(debugLoggerPtr)};
         loggerPtr = std::make_shared<spdlog::logger>("log", loggers);
-    } else {
+    }
+    else
+    {
         // If no debugger is attached, only log to the file.
         loggerPtr = std::make_shared<spdlog::logger>("log", std::move(fileLoggerPtr));
     }

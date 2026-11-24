@@ -30,8 +30,12 @@ int property MantellaListenerTextHotkey auto
 int property MantellaEndHotkey auto
 int property MantellaToggleHotkey auto
 int property MantellaEndConversationHotkey auto
-int property MantellaFreeFlowHotkey auto
+int property MantellaFreeFlowHotkey auto ; no longer used: free-flow uses MantellaPushToTalkHotkey. Kept for saves made with version 8
+int property MantellaPushToTalkHotkey auto
+bool property pushToTalkEnabled auto
 bool property freeFlowUseNearest auto
+bool property freeFlowEnabled auto
+bool property showScreenshotMessages auto
 float property freeFlowDistance auto
 bool property freeFlowIncludeCreatures auto
 int property awarenessMaxCharacters auto
@@ -130,12 +134,23 @@ endEvent
 ; lastVersion is the previous MCM version number defined in 'MantellaMCM.psc' before the new update is applied.
 ; Whenever a new repository value OR a new MCM setting is added, up the MCM version number returned by `ManatellaMCM.GetVersion()`
 ; and add the corresponding default value here in a block corresponding to the version number like the examples below
-; Doing it like this will only assign the defaul values to settings that haven't been initialised prior.
+; Doing it like this will only assign the defaul values to settings that haven't been initialized prior.
 function assignDefaultSettings(int lastVersion, bool isFirstInit = false)
+    If (lastVersion < 9 || isFirstInit)
+        ; The push-to-talk key is set here, in the game, and reported to Mantella. V (47) by default.
+        ; A key that was bound as the free-flow talk key in version 8 is carried over
+        freeFlowEnabled = true
+        pushToTalkEnabled = true
+        MantellaPushToTalkHotkey = 47
+        If (lastVersion >= 8 && !isFirstInit && MantellaFreeFlowHotkey > 0)
+            MantellaPushToTalkHotkey = MantellaFreeFlowHotkey
+        EndIf
+        RegisterForKey(MantellaPushToTalkHotkey)
+        showScreenshotMessages = false
+    EndIf
     If (lastVersion < 8 || isFirstInit)
         MantellaToggleHotkey = -1
         MantellaEndConversationHotkey = -1
-        MantellaFreeFlowHotkey = -1
         freeFlowUseNearest = true
         freeFlowDistance = 5
         freeFlowIncludeCreatures = false
@@ -275,11 +290,22 @@ function BindEndConversationHotkey(int keyCode)
     RegisterForKey(keyCode)
 endfunction
 
-function BindFreeFlowHotkey(int keyCode)
-    ;used by the MCM_GeneralSettings when updating the free-flow talk hotkey KeyMapChange
-    UnregisterForKey(MantellaFreeFlowHotkey)
-    MantellaFreeFlowHotkey=keyCode
-    RegisterForKey(keyCode)
+; Whether the key is (also) bound to one of the other controls of the mod, which then has to keep receiving it
+bool function IsOtherHotkey(int keyCode)
+    return keyCode == MantellaStartHotkey || keyCode == MantellaListenerTextHotkey || keyCode == MantellaEndHotkey || keyCode == MantellaToggleHotkey || keyCode == MantellaEndConversationHotkey || keyCode == MantellaCustomGameEventHotkey || keyCode == MantellaRadiantHotkey
+endfunction
+
+function BindPushToTalkHotkey(int keyCode)
+    ;used by the MCM_GeneralSettings when updating the push-to-talk hotkey KeyMapChange
+    if MantellaPushToTalkHotkey > 0 && !IsOtherHotkey(MantellaPushToTalkHotkey)
+        UnregisterForKey(MantellaPushToTalkHotkey)
+    endIf
+    MantellaPushToTalkHotkey = keyCode
+    if keyCode > 0
+        RegisterForKey(keyCode)
+    endIf
+    ; Mantella is the one listening for the key while the player speaks, so it is told about the new key
+    (Quest.GetQuest("MantellaConversation") as MantellaConversation).SendPushToTalkSettings()
 endfunction
 
 ; The NPC the player is talking to when the free-flow talk key is pressed: the one under the crosshair, or else
@@ -336,6 +362,9 @@ Event OnKeyDown(int KeyCode)
     ;this function was previously in MantellaListener Script back in Mantella 0.9.2
 	;this ensures the right key is pressed and only activated while not in menu mode
     if !utility.IsInMenuMode()
+        if KeyCode == MantellaPushToTalkHotkey && pushToTalkEnabled
+            (Quest.GetQuest("MantellaConversation") as MantellaConversation).OnPushToTalkPressed()
+        endIf
         if KeyCode == MantellaStartHotkey
             Actor targetRef = (Game.GetCurrentCrosshairRef() as actor)            
             if (targetRef) ;If we have a target under the crosshair, cast sepll on it
@@ -375,7 +404,7 @@ Event OnKeyDown(int KeyCode)
                     MantellaSpell.cast(PlayerRef, targetRef)
                 endIf
             endIf
-        elseIf KeyCode == MantellaFreeFlowHotkey
+        elseIf KeyCode == MantellaPushToTalkHotkey && freeFlowEnabled && pushToTalkEnabled
             ; Free-flow: meant to share its key with push-to-talk. Talking at an NPC who is not in the conversation brings them into it
             Actor targetRef = GetFreeFlowTarget()
             if (targetRef)

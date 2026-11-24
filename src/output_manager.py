@@ -534,6 +534,6 @@ class ChatManager:
                 logger.log(23, f"Full raw response ({active_client.get_count_tokens(raw_response)} tokens): {raw_response.strip()}")
                 blocking_queue.is_more_to_come = False
                 # This sentence is required to make sure there is one in case the game is already waiting for it
-                # before the ChatManager realises there is not another message coming from the LLM
+                # before the ChatManager realizes there is not another message coming from the LLM
                 blocking_queue.put(Sentence(SentenceContent(active_character,"",SentenceTypeEnum.SPEECH, True),"",0))
                 self.__is_generating = False

@@ -27,5 +27,5 @@ event OnNpcCancelTravelAdvancedActionReceived(Form speaker)
         i += 1
     EndWhile
 
-    Debug.Notification("Travel plans cancelled.")
+    Debug.Notification("Travel plans canceled.")
 endEvent
