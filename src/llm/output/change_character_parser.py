@@ -12,6 +12,7 @@ logger = utils.get_logger()
 
 class change_character_parser(output_parser):
     """Class to check if character change is in the current output of the LLM."""
+    MAX_WORDS_IN_NAME: int = 5 # "Jarl Balgruuf the Greater" has 4
     def __init__(self, characters_in_conversation: Characters, actions: list[Action] | None = None) -> None:
         super().__init__()
         self.__dict_name_permutations: OrderedDict[str, Character] = OrderedDict() #Dictionary to hold permutations of the name for easy checks. e.g. "Svana Far-Shield" -> ["Svana Far-Shield", "Svana", "Far-Shield"]
@@ -54,6 +55,9 @@ class change_character_parser(output_parser):
             return None, output
         
         parts = output.split(':', 1)
+        if len(parts[0].split()) > self.MAX_WORDS_IN_NAME:
+            # eg "We wander Tamriel hunting the abominations that prey on mortals:": a sentence, not a character change
+            return None, output
         for name, character in self.__dict_name_permutations.items():
             if parts[0].lower().endswith(name.lower()):
                 character_switch_removed = parts[0][:-len(name)]

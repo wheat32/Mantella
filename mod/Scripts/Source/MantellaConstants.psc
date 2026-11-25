@@ -36,6 +36,9 @@ string property KEY_REQUESTTYPE_ENDCONVERSATION = "mantella_end_conversation" au
 string property KEY_REPLYTTYPE_INITCOMPLETED = "mantella_init_completed" auto
 string property KEY_PTT_ENABLED = "mantella_ptt_enabled" auto
 string property KEY_PTT_KEYCODE = "mantella_ptt_key_code" auto
+string property KEY_PLAYSESSION = "mantella_play_session" auto
+string property KEY_ENDCONVERSATION_REASON = "mantella_end_reason" auto
+string property ENDCONVERSATION_REASON_PLAYERLEFT = "player_left" auto
 string property KEY_REPLYTTYPE_STARTCONVERSATIONCOMPLETED = "mantella_start_conversation_completed" auto
 
 string property KEY_REPLYTYPE_NPCTALK = "mantella_npc_talk" auto
@@ -65,6 +68,7 @@ string property KEY_ACTOR_CUSTOMVALUES = "mantella_actor_custom_values" auto
 string property KEY_ACTOR_NOTABLEITEMS = "mantella_actor_notable_items" auto
 string property KEY_ACTOR_CARRIEDKINDS = "mantella_actor_carried_kinds" auto
 string property KEY_ACTOR_CARRIESNOTHING = "mantella_actor_carries_nothing" auto
+string property KEY_ACTOR_ISUNIQUE = "mantella_actor_is_unique" auto
 
 string property KEY_ACTOR_PC_DESCRIPTION = "mantella_pc_description" auto
 string property KEY_ACTOR_PC_VOICEPLAYERINPUT = "mantella_pc_voiceplayerinput" auto

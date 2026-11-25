@@ -34,6 +34,7 @@ Actor Property RecentActor5 Auto Hidden
 
 
 event OnInit()
+    repository.StartNewPlaySession()
     PlayerRef.AddSpell(MantellaSpell)
     PlayerRef.AddSpell(MantellaPower);gia
     PlayerRef.AddSpell(MantellaEndSpell)
@@ -50,6 +51,44 @@ Function AddIngameEventToConversation(string eventText)
 EndFunction
 
 Float meterUnits = 71.0210
+; NPCs the player has walked away from leave the conversation (which ends when no one is left)
+Function RemoveFarAwayParticipants()
+    if repository.conversationLeaveDistance <= 0
+        return
+    endIf
+    float maxDistance = ConvertMeterToGameUnits(repository.conversationLeaveDistance)
+    Actor[] farAway = new Actor[10]
+    int count = 0
+    int i = 0
+    int participantCount = conversation.Participants.GetSize()
+    while i < participantCount && count < farAway.Length
+        Actor participant = conversation.Participants.GetAt(i) as Actor
+        if participant && participant != PlayerRef && participant.GetDistance(PlayerRef) > maxDistance
+            farAway[count] = participant
+            count += 1
+        endIf
+        i += 1
+    endWhile
+    ; One at a time: the conversation ends as soon as no one but the player is left. NPCs are told that the player walked away
+    ; from them, so that they can mind it (or not) the way their personality goes
+    i = 0
+    while i < count && conversation.IsRunning()
+        Actor[] leaving = new Actor[1]
+        leaving[0] = farAway[i]
+        int othersLeft = conversation.Participants.GetSize() - 2 ; without the player and the one leaving
+        if othersLeft > 0
+            AddIngameEventToConversation(getPlayerName() + " walked away from " + farAway[i].GetDisplayName() + ", leaving the conversation without a word.")
+        else
+            conversation.SetEndReason("player_left")
+        endIf
+        conversation.RemoveActorsFromConversation(leaving)
+        i += 1
+    endWhile
+    if conversation.IsRunning()
+        conversation.SetEndReason("")
+    endIf
+EndFunction
+
 Float Function ConvertMeterToGameUnits(Float meter)
     Return Meter * meterUnits
 EndFunction
@@ -207,6 +246,10 @@ Function RemoveActorFromArray(Actor[] actors, Actor toRemove)
 EndFunction
 
 Event OnPlayerLoadGame()
+    ; Key registrations can get lost (eg when two options shared a key and one of them was changed): they are renewed on every load
+    repository.RegisterAllHotkeys()
+    ; Before anything is sent to Mantella: a conversation that was open in Mantella belongs to the game that was left
+    repository.StartNewPlaySession()
     If(conversation.IsRunning())
         conversation.EndConversation()
     endif
@@ -287,6 +330,9 @@ Actor[] Function ScanNearbyActors()
 EndFunction
 
 event OnUpdate()
+    if conversation.IsRunning() && conversation.IsPlayerInConversation()
+        RemoveFarAwayParticipants()
+    endIf
     ; If no Mantella conversation active
     if !conversation.IsRunning()
         if repository.radiantEnabled || repository.approachEnabled
@@ -526,7 +572,9 @@ Event OnSit(ObjectReference akFurniture)
     if repository.playerTrackingOnSit
         ; Debug.MessageBox("playerTrackingOnSit is true")
         String furnitureName = akFurniture.getbaseobject().getname()
-        AddIngameEventToConversation(getPlayerName() + " rested on / used a(n) "+furnitureName)
+        if furnitureName != "" && furnitureName != "This should not be visible" ; the name of invisible furniture markers
+            AddIngameEventToConversation(getPlayerName() + " rested on / used a(n) "+furnitureName)
+        endIf
     endif
 endEvent
 
@@ -535,7 +583,9 @@ Event OnGetUp(ObjectReference akFurniture)
     if repository.playerTrackingOnGetUp
         ;Debug.MessageBox("The player stood up.")
         String furnitureName = akFurniture.getbaseobject().getname()
-        AddIngameEventToConversation(getPlayerName() + " stood up from a(n) "+furnitureName)
+        if furnitureName != "" && furnitureName != "This should not be visible" ; the name of invisible furniture markers
+            AddIngameEventToConversation(getPlayerName() + " stood up from a(n) "+furnitureName)
+        endIf
     endif
 EndEvent
 

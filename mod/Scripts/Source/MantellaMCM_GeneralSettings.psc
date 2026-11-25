@@ -44,6 +44,7 @@ function RightColumn(MantellaMCM mcm, MantellaRepository Repository) global
     mcm.AddHeaderOption("Awareness of Surroundings")
     mcm.oid_awarenessMaxCharacters = mcm.AddSliderOption("Max Characters Noticed", repository.awarenessMaxCharacters)
     mcm.oid_awarenessDistance = mcm.AddSliderOption("Notice Distance", repository.awarenessDistance)
+    mcm.oid_conversationLeaveDistance = mcm.AddSliderOption("Leave Conversation Distance", repository.conversationLeaveDistance)
 
     mcm.AddHeaderOption("NPC Inventory")
     mcm.oid_notableItemsEnabled = mcm.AddToggleOption("NPCs Know What They Carry", repository.notableItemsEnabled)
@@ -76,6 +77,11 @@ function SliderOptionOpen(MantellaMCM mcm, int optionID, MantellaRepository Repo
         mcm.SetSliderDialogDefaultValue(150)
         mcm.SetSliderDialogRange(10, 300)
         mcm.SetSliderDialogInterval(10)
+    elseIf optionID==mcm.oid_conversationLeaveDistance
+        mcm.SetSliderDialogStartValue(repository.conversationLeaveDistance)
+        mcm.SetSliderDialogDefaultValue(20)
+        mcm.SetSliderDialogRange(0, 100)
+        mcm.SetSliderDialogInterval(5)
     elseIf optionID==mcm.oid_freeFlowDistance
         mcm.SetSliderDialogStartValue(repository.freeFlowDistance)
         mcm.SetSliderDialogDefaultValue(5)
@@ -109,6 +115,9 @@ function SliderOptionAccept(MantellaMCM mcm, int optionID, float value, Mantella
     elseIf optionId == mcm.oid_awarenessDistance
         mcm.SetSliderOptionValue(optionId, value)
         Repository.awarenessDistance=value
+    elseIf optionId == mcm.oid_conversationLeaveDistance
+        mcm.SetSliderOptionValue(optionId, value)
+        Repository.conversationLeaveDistance=value
     elseIf optionId == mcm.oid_freeFlowDistance
         mcm.SetSliderOptionValue(optionId, value)
         Repository.freeFlowDistance=value

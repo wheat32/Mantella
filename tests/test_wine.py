@@ -88,3 +88,29 @@ def test_virtual_paths_are_written_the_way_the_host_writes_them(monkeypatch):
     assert wine.to_host_path("Z:\\home\\user\\Games") == "/home/user/Games"
     # a drive that is not the host's file system keeps its Windows form
     assert wine.to_host_path("C:\\users\\steamuser\\Documents") == "C:\\users\\steamuser\\Documents"
+
+
+def test_paths_in_log_messages_are_written_the_host_way():
+    """Under Wine, every Windows path in a log message is shown as a path of the host"""
+    roots = {'Z': '/', 'C': '/mnt/games/compatdata/489830/pfx/drive_c'}
+    convert = lambda text: wine.convert_windows_paths_in_text(text, lambda letter: roots.get(letter.upper()))
+
+    assert convert("Loaded 8 actions from: \n    Z:\\mnt\\games\\Skyrim Special Edition\\data\\actions") == \
+        "Loaded 8 actions from: \n    /mnt/games/Skyrim Special Edition/data/actions"
+    assert convert("C:/users/steamuser/Documents/My Games/Mantella/data/Skyrim/conversations/Nick1/Fisherman - 097977 does not exist.") == \
+        "/mnt/games/compatdata/489830/pfx/drive_c/users/steamuser/Documents/My Games/Mantella/data/Skyrim/conversations/Nick1/Fisherman - 097977 does not exist."
+    assert convert('Could not run Piper. Ensure that the path "Z:\\opt\\piper" is correct.') == 'Could not run Piper. Ensure that the path "/opt/piper" is correct.'
+    assert convert("two paths: Z:\\a\\b\nand C:\\users") == "two paths: /a/b\nand /mnt/games/compatdata/489830/pfx/drive_c/users"
+    # left alone: URLs, times, drives Wine does not know, and text without paths
+    assert convert("http://localhost:4999/ui") == "http://localhost:4999/ui"
+    assert convert("[10:22:39] Ratio 4:3") == "[10:22:39] Ratio 4:3"
+    assert convert("Q:\\unknown\\drive") == "Q:\\unknown\\drive"
+    assert convert("") == ""
+
+
+def test_log_filter_rewrites_messages(monkeypatch):
+    import logging
+    monkeypatch.setattr(wine, "_get_drive_root", lambda letter: '/' if letter.upper() == 'Z' else None)
+    record = logging.LogRecord("Mantella", logging.INFO, __file__, 1, "Running in %s", ("Z:\\mnt\\games",), None)
+    assert wine.HostPathLogFilter().filter(record) is True
+    assert record.getMessage() == "Running in /mnt/games"

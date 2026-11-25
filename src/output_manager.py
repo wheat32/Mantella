@@ -1,3 +1,4 @@
+import re
 import asyncio
 from threading import Lock
 import time
@@ -537,10 +538,19 @@ class ChatManager:
                 try:
                     actions_in_chain = [parser for parser in parser_chain if isinstance(parser, actions_parser)]
                     remaining_text = accumulator.take_remaining_text()
+                    remaining_speech = remaining_text
                     if actions_in_chain and remaining_text.strip() and ':' in remaining_text:
-                        _, trailing_actions = actions_in_chain[0].find_actions_in_text(remaining_text)
+                        remaining_speech, trailing_actions = actions_in_chain[0].find_actions_in_text(remaining_text)
                         for action in trailing_actions:
                             actions_in_chain[0].add_action(action, None, settings)
+                    # A last sentence without an ending (eg one that ends with a colon) was never spoken. It is, unless the
+                    # response was cut short on purpose (eg by the maximum number of sentences, or the player speaking)
+                    remaining_speech = remaining_speech.strip().rstrip(':;,').strip()
+                    if remaining_speech and re.search(r'\w', remaining_speech) and not settings.stop_generation:
+                        if remaining_speech[-1] not in '.!?…':
+                            remaining_speech += '.'
+                        if not self.__config.narration_handling == NarrationHandlingEnum.CUT_NARRATIONS or settings.sentence_type != SentenceTypeEnum.NARRATION:
+                            blocking_queue.put(self.generate_sentence(SentenceContent(settings.current_speaker, remaining_speech, settings.sentence_type, False)))
                     if settings.deferred_actions:
                         blocking_queue.put(Sentence(SentenceContent(settings.current_speaker, "", SentenceTypeEnum.SPEECH, True, list(settings.deferred_actions)), "", 0))
                 except Exception as e:

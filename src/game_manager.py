@@ -51,6 +51,7 @@ class GameStateManager:
         self.__automatic_greeting: bool = config.automatic_greeting
         self.__conv_has_narrator: bool = config.narration_handling == NarrationHandlingEnum.USE_NARRATOR
         self.__should_reload: bool = False
+        self.__conversation_play_session: Any = None # see is_from_another_play_session
         self.__chat_manager.clear_per_character_client_cache()
         self.__random_selector = RandomLLMSelector()
         if PTTController.load_saved_settings(config.save_folder, config.ptt_enabled, config.ptt_hotkey)[0]:
@@ -96,11 +97,10 @@ class GameStateManager:
 
     @utils.time_it
     def start_conversation(self, input_json: dict[str, Any]) -> dict[str, Any]:
-        if self.__talk: #This should only happen if game and server are out of sync due to some previous error -> close conversation and start a new one
-            self.__talk.end()
-            self.__talk = None
-            runtime_state.set_conversation_active(False)
+        if self.__talk: # a conversation that was not ended (eg because a save was loaded during it) -> close it and start a new one
+            self.__end_open_conversation(input_json, None)
 
+        self.__conversation_play_session = input_json.get(comm_consts.KEY_PLAYSESSION)
         world_id = "default"
         if input_json.__contains__(comm_consts.KEY_STARTCONVERSATION_WORLDID):
             world_id = input_json[comm_consts.KEY_STARTCONVERSATION_WORLDID]
@@ -290,13 +290,38 @@ class GameStateManager:
             return {comm_consts.KEY_REPLYTYPE: comm_consts.KEY_REPLYTYPE_NPCTALK}
 
     @utils.time_it
+    @staticmethod
+    def is_from_another_play_session(conversation_play_session: Any, request_play_session: Any) -> bool:
+        """Whether a request comes from a game that has been loaded since the conversation started: the mod picks a new play session
+        number each time a save is loaded. Unknown numbers (eg from older versions of the mod) never count as different"""
+        if not isinstance(conversation_play_session, int) or not isinstance(request_play_session, int):
+            return False
+        if isinstance(conversation_play_session, bool) or isinstance(request_play_session, bool):
+            return False
+        return conversation_play_session != request_play_session
+
+    def __end_open_conversation(self, input_json: dict[str, Any], end_timestamp: float | None) -> None:
+        """Ends the open conversation. If a save has been loaded since it started, it belongs to the game that was left:
+        it is not remembered, as it never happened in the game being played now"""
+        if not self.__talk:
+            return
+        remember = not self.is_from_another_play_session(self.__conversation_play_session, input_json.get(comm_consts.KEY_PLAYSESSION))
+        if not remember:
+            names = [npc.name for npc in self.__talk.context.npcs_in_conversation.get_non_player_characters()]
+            logger.log(23, f"A save was loaded during the conversation with {', '.join(n for n in names if n) or 'the NPCs'}: it is not added to their memories")
+        self.__talk.end(end_timestamp, remember=remember)
+        self.__talk = None
+        self.__conversation_play_session = None
+        runtime_state.set_conversation_active(False)
+
     def end_conversation(self, input_json: dict[str, Any]) -> dict[str, Any]:
         if(self.__talk):
             # Extract end timestamp from game client
             end_timestamp = input_json.get(comm_consts.KEY_ENDCONVERSATION_TIMESTAMP, None)
-            self.__talk.end(end_timestamp)
-            self.__talk = None
-            runtime_state.set_conversation_active(False)
+            if input_json.get(comm_consts.KEY_ENDCONVERSATION_REASON) == comm_consts.ENDCONVERSATION_REASON_PLAYERLEFT:
+                # the player walked away: the NPCs remember that, and can mind it (or not) the next time they meet the player
+                self.__talk.note_player_walked_away()
+            self.__end_open_conversation(input_json, end_timestamp)
             if self.__stt:
                 self.__stt.start_idle_capture()
 

@@ -199,7 +199,7 @@ Event OnSit(ObjectReference akFurniture)
         ;Debug.MessageBox(selfName+" sat down.")
         String furnitureName = akFurniture.getbaseobject().getname()
         ; only save event if actor is sitting / resting on furniture (and not just, for example, leaning on a bar table)
-        if furnitureName != ""
+        if furnitureName != "" && furnitureName != "This should not be visible" ; the name of invisible furniture markers
             AddIngameEventToConversation(selfName+" rested on / used a(n) "+furnitureName)
         endIf
     endif
@@ -212,7 +212,7 @@ Event OnGetUp(ObjectReference akFurniture)
         ;Debug.MessageBox(selfName+" stood up.")
         String furnitureName = akFurniture.getbaseobject().getname()
         ; only save event if actor is sitting / resting on furniture (and not just, for example, leaning on a bar table)
-        if furnitureName != ""
+        if furnitureName != "" && furnitureName != "This should not be visible" ; the name of invisible furniture markers
             AddIngameEventToConversation(selfName+" stood up from a(n) "+furnitureName)
         endIf
     endif

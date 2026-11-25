@@ -15,6 +15,7 @@ class ActorCustomValues(BaseModel):
     voice_player_input: bool = Field(False, alias=comm_consts.KEY_ACTOR_PC_VOICEPLAYERINPUT)
     notable_items: Optional[List[str]] = Field(None, alias=comm_consts.KEY_ACTOR_NOTABLEITEMS, description="Notable things an NPC carries (a lot of gold, notes, maps, keys, valuables)")
     carried_kinds: Optional[List[str]] = Field(None, alias=comm_consts.KEY_ACTOR_CARRIEDKINDS, description="The kinds of things an NPC carries besides what they wear and wield (food, potions, ...)")
+    is_unique: Optional[bool] = Field(None, alias=comm_consts.KEY_ACTOR_ISUNIQUE, description="Whether an NPC is unique (has a name of their own), unlike eg 'Fisherman' or 'bandit'")
     carries_nothing: Optional[bool] = Field(None, alias=comm_consts.KEY_ACTOR_CARRIESNOTHING, description="Whether an NPC carries nothing besides what they wear and wield")
 
 class Actor(BaseModel):

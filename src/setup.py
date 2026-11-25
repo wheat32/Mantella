@@ -10,7 +10,7 @@ from src.config.config_loader import ConfigLoader
 from src.telemetry.telemetry import get_telemetry_manager
 from src.actions.function_manager import FunctionManager
 from src.ui.log_buffer import get_log_buffer, get_console_log_file, ConsoleLogFile
-from src.wine import to_host_path
+from src.wine import to_host_path, is_running_under_wine, HostPathLogFilter
 import src.system_info as system_info
 
 class MantellaSetup:
@@ -109,6 +109,9 @@ Conversation histories, config.ini, and logging.log available in:
         logging_level = logging.DEBUG if advanced_logs else logging.INFO
         logger = utils.get_logger()
         logger.propagate = False
+        if is_running_under_wine() and not any(isinstance(f, HostPathLogFilter) for f in logger.filters):
+            # every path in the log, the console and the web UI is shown as a path of the host system ('/mnt/...' instead of 'Z:\\mnt\\...')
+            logger.addFilter(HostPathLogFilter())
         # setLevel (rather than assigning the level directly) also resets the logger's cache of enabled levels.
         # Without this, levels used before logging was set up (eg 'Startup' messages while loading the config) would stay disabled
         logger.setLevel(logging_level)

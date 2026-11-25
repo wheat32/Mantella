@@ -566,12 +566,30 @@ class Conversation:
                 return actor
         return None
 
+    def note_player_walked_away(self) -> None:
+        """Records that the player left the conversation by walking away, so that it becomes part of the NPCs' memories"""
+        player = self.__context.npcs_in_conversation.get_player_character()
+        npc_names = [npc.name for npc in self.__context.npcs_in_conversation.get_non_player_characters()]
+        if not player or not npc_names:
+            return
+        note = UserMessage(self.__context.config, "", player.name, False)
+        note.is_multi_npc_message = self.__context.npcs_in_conversation.contains_multiple_npcs()
+        note.add_event([self.get_walked_away_event_text(player.name, npc_names)])
+        self.__messages.add_message(note)
+
+    @staticmethod
+    def get_walked_away_event_text(player_name: str, npc_names: list[str]) -> str:
+        names = ', '.join(npc_names)
+        return (f"{player_name} walked away from {names} in the middle of the conversation, without saying goodbye. How much "
+                f"{names} minded depends on their personality and on who {player_name} is to them.")
+
     @utils.time_it
-    def end(self, end_timestamp: float | None = None):
+    def end(self, end_timestamp: float | None = None, remember: bool = True):
         """Ends a conversation
         
         Args:
             end_timestamp: Optional game timestamp (days passed as float) when conversation ends
+            remember: If False, the conversation is not added to the NPCs' memories (eg because a save was loaded during it)
         """
         self.__has_already_ended = True
         self.__stop_generation()
@@ -582,7 +600,8 @@ class Conversation:
                 self.__stt.stop_listening()
             except Exception as e:
                 logger.warning(f'Could not stop listening for mic input: {e}')
-        self.__save_conversation(is_reload=False, end_timestamp=end_timestamp)
+        if remember:
+            self.__save_conversation(is_reload=False, end_timestamp=end_timestamp)
     
     @utils.time_it
     def __start_generating_npc_sentences(self, allow_tool_use: bool = True):
