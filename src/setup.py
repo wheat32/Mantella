@@ -27,6 +27,9 @@ class MantellaSetup:
         self._setup_logging(os.path.join(self.save_folder, logging_file), self.config.advanced_logs)
         
         FunctionManager.load_all_actions(disabled_actions=self.config.disabled_actions)
+        if self.config.advanced_actions == 'Automatic':
+            reason = 'the LLM supports tool calling' if self.config.advanced_actions_enabled else 'the LLM is not known to support tool calling'
+            logger.log(23, f"Advanced Actions: {'on' if self.config.advanced_actions_enabled else 'off'} (Automatic: {reason})")
         FunctionManager.log_actions_enabled(self.config.advanced_actions_enabled)
         self.config.actions = FunctionManager.get_legacy_actions()
 

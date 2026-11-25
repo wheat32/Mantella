@@ -18,6 +18,8 @@ import src.utils as utils
 from src import runtime_state
 from src.http.communication_constants import communication_constants as comm_consts
 from src.stt.ptt_controller import PTTController
+from src.conversation.npc_records import NpcRecords
+from src.conversation.conversation_log import conversation_log
 from src.stt.stt import Transcriber, ListeningCanceled
 from src.actions.function_manager import FunctionManager
 from src.random_llm_selector import RandomLLMSelector, LLMSelection
@@ -442,6 +444,16 @@ class GameStateManager:
                 base_id = base_id[-6:]
 
             character_name: str = str(json[comm_consts.KEY_ACTOR_NAME])
+            # An NPC that gave themselves a name (see TellName) is known by it, whatever the game currently shows. Their background
+            # is still looked up under the game's name for them (eg "Fisherman")
+            given_name: str | None = None
+            lookup_name: str = character_name
+            if self.__talk and not bool(json[comm_consts.KEY_ACTOR_ISPLAYER]):
+                given_name = NpcRecords(conversation_log.game_path, self.__talk.context.world_id).get_given_name(ref_id)
+                raw_custom_values = json.get(comm_consts.KEY_ACTOR_CUSTOMVALUES) or {}
+                base_name = raw_custom_values.get(comm_consts.KEY_ACTOR_BASENAME) if isinstance(raw_custom_values, dict) else None
+                if isinstance(base_name, str) and base_name.strip():
+                    lookup_name = base_name.strip()
             gender: int = int(json[comm_consts.KEY_ACTOR_GENDER])
             race: str = str(json[comm_consts.KEY_ACTOR_RACE])
             actor_voice_model: str = str(json[comm_consts.KEY_ACTOR_VOICETYPE])
@@ -481,7 +493,7 @@ class GameStateManager:
                     tts_service = already_loaded_character.tts_service
                     is_generic_npc = already_loaded_character.is_generic_npc
             elif self.__talk and not is_player_character :#If this is not the player and the character has not already been loaded
-                external_info: external_character_info = self.__game.load_external_character_info(base_id, character_name, race, gender, actor_voice_model)
+                external_info: external_character_info = self.__game.load_external_character_info(base_id, lookup_name, race, gender, actor_voice_model)
                 
                 bio = external_info.bio
                 tts_voice_model = external_info.tts_voice_model
@@ -501,6 +513,8 @@ class GameStateManager:
                 else:
                     tts_voice_model = self.__get_player_voice_model(None)
 
+            if given_name:
+                character_name = given_name
             return Character(base_id,
                             ref_id,
                             character_name,

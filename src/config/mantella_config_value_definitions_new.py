@@ -149,7 +149,8 @@ class MantellaConfigValueDefinitionsNew:
         result.add_base_group(vision_category)
 
         actions_category = ConfigValueGroup("Actions", "Actions", "Settings for in-game actions.", on_value_change_callback)
-        actions_category.add_config_value(ActionDefinitions.get_advanced_actions_enabled_config_value())
+        actions_category.add_config_value(ActionDefinitions.get_advanced_actions_config_value())
+        actions_category.add_config_value(ActionDefinitions.get_legacy_advanced_actions_enabled_config_value())
         actions_category.add_config_value(ActionDefinitions.get_disabled_actions_config_value())
         actions_category.add_config_value(ActionDefinitions.get_custom_function_model_config_value())
         actions_category.add_config_value(ActionDefinitions.get_function_llm_api_config_value())
@@ -186,6 +187,7 @@ class MantellaConfigValueDefinitionsNew:
         startup_category = ConfigValueGroup("Startup", "Startup", "Startup settings.", on_value_change_callback)
         startup_category.add_config_value(StartupDefinitions.get_auto_launch_ui_config_value())
         startup_category.add_config_value(StartupDefinitions.get_play_startup_sound_config_value())
+        startup_category.add_config_value(StartupDefinitions.get_check_for_updates_config_value())
         startup_category.add_config_value(StartupDefinitions.get_remove_mei_folders_config_value())
         result.add_base_group(startup_category)
 

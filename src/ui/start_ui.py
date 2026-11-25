@@ -10,6 +10,7 @@ from src.ui.settings_ui_constructor import SettingsUIConstructor
 from src.ui.log_buffer import get_log_buffer, get_console_log_file
 from src.ui.memory_editor import MemoryEditor
 from src.ui import process_control
+from src.update_check import get_update_check, NewRelease
 from src.wine import to_host_path
 from src.config.definitions.tts_definitions import TTSDefinitions
 from src.setup import MantellaSetup
@@ -23,6 +24,8 @@ class StartUI(routeable):
     BANNER = "docs/_static/img/mantella_banner.png"
     def __init__(self, config: ConfigLoader) -> None:
         super().__init__(config)
+        if getattr(config, 'check_for_updates', True):
+            get_update_check().start(utils.get_version())
         self.__constructor = SettingsUIConstructor(self.__on_setting_changed,
                                                    group_extras={"Other": self.__generate_saved_logs_controls},
                                                    groups_with_reset_all={"Prompts"},
@@ -37,6 +40,8 @@ class StartUI(routeable):
             prerelease_label = utils.get_prerelease_label()
             if prerelease_label:
                 gr.HTML(self.get_prerelease_banner_html(utils.get_version(), prerelease_label))
+            # filled in once GitHub has answered (see __show_update_notice), hidden if there is nothing newer
+            update_notice = gr.HTML("", visible=False)
             # with gr.Tab("Settings") as tabs:
             settings_page = self.__generate_settings_page()
             # Options that configure the XTTS server Mantella starts itself are meaningless if XTTS runs on another machine
@@ -54,7 +59,28 @@ class StartUI(routeable):
 
             with gr.Row(elem_classes="custom-footer"):
                 gr.HTML(self.get_footer_html(utils.get_version()))
+            main_block.load(self.__show_update_notice, None, update_notice)
         return main_block
+
+    def __show_update_notice(self):
+        if not getattr(self._config, 'check_for_updates', True):
+            return gr.update(visible=False)
+        # the page usually opens while Mantella is starting: give GitHub a moment to answer
+        new_release = get_update_check().get_result(wait_seconds=6)
+        if not new_release:
+            return gr.update(visible=False)
+        return gr.update(value=self.get_update_notice_html(utils.get_version(), new_release), visible=True)
+
+    @staticmethod
+    def get_update_notice_html(current_version: str, new_release: NewRelease) -> str:
+        kind = 'pre-release' if new_release.is_prerelease else 'version'
+        return f"""
+            <div class="update-notice">
+                <span class="badge badge-update"><b>UPDATE</b></span>
+                <span>A new {kind} of Mantella is available: <b>{html.escape(new_release.version)}</b> (this is {html.escape(current_version)}).
+                <a href="{html.escape(new_release.url, quote=True)}" target="_blank" rel="noopener">See what is new and download it</a></span>
+            </div>
+        """
 
     @staticmethod
     def get_prerelease_banner_html(version: str, prerelease_label: str) -> str:

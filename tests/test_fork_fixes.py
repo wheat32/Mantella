@@ -562,7 +562,9 @@ def test_what_npcs_carry_and_who_knows_the_player():
     assert "Fisherman only does if Nick has told it" in note and "a courier sent to find Nick" in note
     assert Context.get_unknown_player_name_note('Nick', []) == ''
     relationships = Context.get_relationships_note('Nick', [('Nazeem', 'a stranger'), ('Lydia', 'a friend')])
-    assert 'to Nazeem, Nick is a stranger and to Lydia, Nick is a friend' in relationships
+    assert 'to Nazeem, Nick is someone Nazeem has just met and to Lydia, Nick is a friend' in relationships
+    assert "'Stranger' is fine now and then, but they vary it" in note
+    assert "'the stranger'" in Summaries.get_unknown_player_name_summary_note('Nick', ['Fisherman'])
     assert 'Only use the name Nick' in Summaries.get_unknown_player_name_summary_note('Nick', ['Fisherman'])
     assert Summaries.get_unknown_player_name_summary_note('Nick', []) == ''
 
@@ -664,3 +666,119 @@ def test_walking_away_is_remembered():
     from src.conversation.conversation import Conversation
     text = Conversation.get_walked_away_event_text('Nick', ['Fisherman'])
     assert text.startswith('Nick walked away from Fisherman in the middle of the conversation') and 'personality' in text
+
+
+def test_update_check_rules():
+    """On a normal release only newer normal releases count; on a pre-release anything newer does"""
+    from src.update_check import parse_version, find_newer_release
+    order = ['0.15.3', '0.16.0', '0.17.0-alpha.1', '0.17.0-alpha.2', '0.17.0-alpha.10', '0.17.0-beta.1', '0.17.0-rc.1', '0.17.0', '0.17.1', '1.0.0']
+    keys = [parse_version(v) for v in order]
+    assert keys == sorted(keys) and len(set(keys)) == len(keys)
+    assert parse_version('v0.17.0-alpha.3') == parse_version('0.17.0-alpha.3')
+    assert parse_version('not a version') is None
+
+    def release(tag, prerelease=False, draft=False):
+        return {'tag_name': tag, 'prerelease': prerelease, 'draft': draft, 'html_url': f'https://github.com/wheat32/Mantella/releases/tag/{tag}'}
+    releases = [release('v0.17.0-alpha.3', True), release('v0.17.0-alpha.2', True), release('v0.16.0'), release('v0.15.3'), release('v0.18.0', draft=True)]
+
+    # on a normal release, a newer pre-release is not mentioned
+    assert find_newer_release('0.16.0', releases) is None
+    newer = find_newer_release('0.15.3', releases)
+    assert newer.version == '0.16.0' and not newer.is_prerelease and newer.url.endswith('v0.16.0')
+    # on a pre-release, any newer version is
+    newer = find_newer_release('0.17.0-alpha.2', releases)
+    assert newer.version == '0.17.0-alpha.3' and newer.is_prerelease
+    assert find_newer_release('0.17.0-alpha.3', releases) is None
+    assert find_newer_release('0.17.0-alpha.3', releases + [release('v0.17.0')]).version == '0.17.0'
+    assert find_newer_release('unknown', releases) is None
+
+
+def test_update_notice_text():
+    from src.ui.start_ui import StartUI
+    from src.update_check import NewRelease
+    notice = StartUI.get_update_notice_html('0.16.0', NewRelease('0.17.0', 'https://github.com/wheat32/Mantella/releases/tag/v0.17.0', False))
+    assert 'A new version of Mantella is available: <b>0.17.0</b> (this is 0.16.0)' in notice and 'releases/tag/v0.17.0' in notice
+    assert 'new pre-release' in StartUI.get_update_notice_html('0.17.0-alpha.2', NewRelease('0.17.0-alpha.3', 'https://example.com', True))
+
+
+def test_nearby_objects(example_skyrim_npc_character):
+    """NPCs are told what is around them, and when that changes (but not when only distances do)"""
+    from src.conversation.context import Context
+    from src.http.communication_constants import communication_constants as comm_consts
+    npc = example_skyrim_npc_character
+    assert Context.get_nearby_objects(npc) is None # the game did not look (eg an older version of the mod)
+    npc.set_custom_character_value(comm_consts.KEY_ACTOR_NEARBYOBJECTSCHECKED, True)
+    assert Context.get_nearby_objects(npc) == []
+    npc.set_custom_character_value(comm_consts.KEY_ACTOR_NEARBYOBJECTS, ['a burning campfire (3 m)', 'a tent (5 m)'])
+    objects = Context.get_nearby_objects(npc)
+    assert Context.get_nearby_objects_description('Fisherman', objects) == 'Notable things around Fisherman: a burning campfire (3 m), a tent (5 m).'
+    assert Context.get_nearby_objects_description('Fisherman', []) == ''
+
+    change = Context.get_nearby_objects_change_event
+    assert change('Fisherman', objects, ['a burning campfire (4 m)', 'a tent (2 m)']) == '' # only closer or further away
+    assert change('Fisherman', objects, ['a campfire that has gone out (3 m)', 'a tent (5 m)']) == 'Notable things around Fisherman now: a campfire that has gone out (3 m), a tent (5 m).'
+    assert change('Fisherman', objects, []) == 'There is nothing of note around Fisherman anymore.'
+    assert change('Fisherman', None, objects) == '' # nothing to compare with
+
+
+def test_advanced_actions_follow_the_model():
+    from src.config.definitions.action_definitions import ActionDefinitions as A
+    assert A.resolve_advanced_actions('Automatic', 'Anthropic', 'claude-haiku-5-5')
+    assert A.resolve_advanced_actions('Automatic', 'OpenRouter', 'anthropic/claude-sonnet-5.5')
+    assert not A.resolve_advanced_actions('Automatic', 'OpenRouter', 'some-small/local-model')
+    assert not A.resolve_advanced_actions('Automatic', 'KoboldCpp', 'anything')
+    assert not A.resolve_advanced_actions('Off', 'Anthropic', 'claude-haiku-5-5')
+    assert A.resolve_advanced_actions('On', 'KoboldCpp', 'anything')
+
+
+def test_npc_records(tmp_path):
+    from src.conversation.npc_records import NpcRecords
+    assert NpcRecords.clean_name(' "Sariel". ') == 'Sariel'
+    assert NpcRecords.clean_name('') == '' and NpcRecords.clean_name('1234') == '' and NpcRecords.clean_name('x' * 60) == ''
+
+    world = tmp_path / 'Nick1'
+    folder = world / 'Fisherman - 097977'
+    folder.mkdir(parents=True)
+    (folder / 'Fisherman.json').write_text('[]')
+    (folder / 'Fisherman_summary_1.txt').write_text('Nick asked for some salmon.')
+
+    records = NpcRecords(str(tmp_path), 'Nick1')
+    assert records.get_given_name('097977') is None
+    records.set_given_name('097977', 'Sariel')
+    records.move_memories('097977', 'Fisherman', 'Sariel')
+    assert (world / 'Sariel - 097977' / 'Sariel_summary_1.txt').read_text() == 'Nick asked for some salmon.'
+    assert (world / 'Sariel - 097977' / 'Sariel.json').exists() and not folder.exists()
+
+    records.set_companion('097977', 'traveling to Riverwood together', 'Riverwood')
+    reloaded = NpcRecords(str(tmp_path), 'Nick1') # kept between runs
+    assert reloaded.get_given_name('097977') == 'Sariel'
+    assert reloaded.get_companion('097977') == {'purpose': 'traveling to Riverwood together', 'destination': 'Riverwood'}
+    reloaded.remove_companion('097977')
+    assert NpcRecords(str(tmp_path), 'Nick1').get_companion('097977') is None
+
+
+def test_renaming_a_character(example_skyrim_npc_character):
+    from src.characters_manager import Characters
+    characters = Characters()
+    characters.add_or_update_character(example_skyrim_npc_character)
+    renamed = characters.rename_character('Guard', 'Sariel')
+    assert renamed is example_skyrim_npc_character and renamed.name == 'Sariel'
+    assert characters.contains_character('Sariel') and not characters.contains_character('Guard')
+    assert characters.rename_character('Guard', 'Someone') is None
+
+
+def test_belongings_and_companions_in_the_prompt():
+    from src.conversation.context import Context
+    from src.conversation.conversation import Conversation
+    assert Context.get_owned_items_description('Sariel', ['Salmon Meat (3)', 'Fishing Rod']) == 'Belongs to Sariel nearby: Salmon Meat (3), Fishing Rod.'
+    assert Context.get_owned_items_description('Sariel', None) == ''
+
+    note = Context.get_companion_note('Nick', 'Sariel', 'traveling to Riverwood together.', 'Riverwood', 'Riverwood Trader')
+    assert 'Sariel is traveling with Nick: traveling to Riverwood together.' in note and 'when they reach Riverwood' in note
+    assert note.endswith('They have now reached Riverwood.')
+    assert 'They have now reached' not in Context.get_companion_note('Nick', 'Sariel', 'traveling to Riverwood together', 'Riverwood', 'Skyrim')
+
+    owned = ['Salmon Meat (3)', 'Fishing Rod', 'Septim Purse']
+    assert Conversation.match_owned_items(['salmon'], owned) == ['Salmon Meat']
+    assert Conversation.match_owned_items(['Salmon Meat (2)', 'Fishing Rod'], owned) == ['Salmon Meat', 'Fishing Rod']
+    assert Conversation.match_owned_items(['Iron Sword'], owned) == [] # only what belongs to the NPC

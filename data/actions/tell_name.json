@@ -1,0 +1,33 @@
+{
+    "identifier": "mantella_npc_tellname",
+    "name": "TellName",
+    "description": "Use this when you, an NPC known only by what you are (eg 'Fisherman' or 'bandit') rather than by a name of your own, tell the player your own name for the first time. From then on you are known by that name.",
+    "key": "TellName",
+    "parameters": {
+        "source": {
+            "type": "array",
+            "description": "The NPC telling their name.",
+            "items": {
+                "type": "string"
+            },
+            "scope": "conversation"
+        },
+        "name": {
+            "type": "string",
+            "description": "The name the NPC gave, eg 'Sariel'. Only the name itself."
+        }
+    },
+    "required": [
+        "source",
+        "name"
+    ],
+    "allowed_games": [
+        "skyrim"
+    ],
+    "requires_response": false,
+    "is-interrupting": false,
+    "allow_repeat": false,
+    "one-on-one": true,
+    "multi-npc": true,
+    "radiant": false
+}

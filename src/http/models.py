@@ -15,6 +15,10 @@ class ActorCustomValues(BaseModel):
     voice_player_input: bool = Field(False, alias=comm_consts.KEY_ACTOR_PC_VOICEPLAYERINPUT)
     notable_items: Optional[List[str]] = Field(None, alias=comm_consts.KEY_ACTOR_NOTABLEITEMS, description="Notable things an NPC carries (a lot of gold, notes, maps, keys, valuables)")
     carried_kinds: Optional[List[str]] = Field(None, alias=comm_consts.KEY_ACTOR_CARRIEDKINDS, description="The kinds of things an NPC carries besides what they wear and wield (food, potions, ...)")
+    nearby_objects: Optional[List[str]] = Field(None, alias=comm_consts.KEY_ACTOR_NEARBYOBJECTS, description="Notable objects around an NPC, nearest first, eg 'a burning campfire (3 m)'")
+    owned_items_nearby: Optional[List[str]] = Field(None, alias=comm_consts.KEY_ACTOR_OWNEDITEMS, description="Items lying or hanging around an NPC that belong to them, eg 'Salmon Meat (3)'")
+    base_name: Optional[str] = Field(None, alias=comm_consts.KEY_ACTOR_BASENAME, description="The NPC's name in the game's data, if they are shown under another name (eg one they gave themselves)")
+    nearby_objects_checked: Optional[bool] = Field(None, alias=comm_consts.KEY_ACTOR_NEARBYOBJECTSCHECKED, description="Whether the game looked for objects around the NPC (if so, a missing list means there are none)")
     is_unique: Optional[bool] = Field(None, alias=comm_consts.KEY_ACTOR_ISUNIQUE, description="Whether an NPC is unique (has a name of their own), unlike eg 'Fisherman' or 'bandit'")
     carries_nothing: Optional[bool] = Field(None, alias=comm_consts.KEY_ACTOR_CARRIESNOTHING, description="Whether an NPC carries nothing besides what they wear and wield")
 

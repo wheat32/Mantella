@@ -45,6 +45,8 @@ function RightColumn(MantellaMCM mcm, MantellaRepository Repository) global
     mcm.oid_awarenessMaxCharacters = mcm.AddSliderOption("Max Characters Noticed", repository.awarenessMaxCharacters)
     mcm.oid_awarenessDistance = mcm.AddSliderOption("Notice Distance", repository.awarenessDistance)
     mcm.oid_conversationLeaveDistance = mcm.AddSliderOption("Leave Conversation Distance", repository.conversationLeaveDistance)
+    mcm.oid_noticeObjectsEnabled = mcm.AddToggleOption("Notice Objects", repository.noticeObjectsEnabled)
+    mcm.oid_objectNoticeDistance = mcm.AddSliderOption("Object Distance", repository.objectNoticeDistance)
 
     mcm.AddHeaderOption("NPC Inventory")
     mcm.oid_notableItemsEnabled = mcm.AddToggleOption("NPCs Know What They Carry", repository.notableItemsEnabled)
@@ -77,6 +79,11 @@ function SliderOptionOpen(MantellaMCM mcm, int optionID, MantellaRepository Repo
         mcm.SetSliderDialogDefaultValue(150)
         mcm.SetSliderDialogRange(10, 300)
         mcm.SetSliderDialogInterval(10)
+    elseIf optionID==mcm.oid_objectNoticeDistance
+        mcm.SetSliderDialogStartValue(repository.objectNoticeDistance)
+        mcm.SetSliderDialogDefaultValue(10)
+        mcm.SetSliderDialogRange(1, 30)
+        mcm.SetSliderDialogInterval(1)
     elseIf optionID==mcm.oid_conversationLeaveDistance
         mcm.SetSliderDialogStartValue(repository.conversationLeaveDistance)
         mcm.SetSliderDialogDefaultValue(20)
@@ -115,6 +122,9 @@ function SliderOptionAccept(MantellaMCM mcm, int optionID, float value, Mantella
     elseIf optionId == mcm.oid_awarenessDistance
         mcm.SetSliderOptionValue(optionId, value)
         Repository.awarenessDistance=value
+    elseIf optionId == mcm.oid_objectNoticeDistance
+        mcm.SetSliderOptionValue(optionId, value)
+        Repository.objectNoticeDistance=value
     elseIf optionId == mcm.oid_conversationLeaveDistance
         mcm.SetSliderOptionValue(optionId, value)
         Repository.conversationLeaveDistance=value
@@ -199,6 +209,9 @@ function OptionUpdate(MantellaMCM mcm, int optionID, MantellaRepository Reposito
     elseIf optionID == mcm.oid_freeFlowEnabled
         repository.freeFlowEnabled =! repository.freeFlowEnabled
         mcm.SetToggleOptionValue(optionID, repository.freeFlowEnabled)
+    elseIf optionID == mcm.oid_noticeObjectsEnabled
+        repository.noticeObjectsEnabled =! repository.noticeObjectsEnabled
+        mcm.SetToggleOptionValue(optionID, repository.noticeObjectsEnabled)
     elseIf optionID == mcm.oid_notableItemsEnabled
         repository.notableItemsEnabled =! repository.notableItemsEnabled
         mcm.SetToggleOptionValue(optionID, repository.notableItemsEnabled)

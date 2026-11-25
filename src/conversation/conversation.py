@@ -1,3 +1,4 @@
+import re
 from enum import Enum
 from threading import Thread, Lock
 import time
@@ -8,6 +9,7 @@ from opentelemetry import context as OpenTelemetryContext
 from src.telemetry.telemetry import set_parent_context
 from src.characters_manager import Characters
 from src.conversation.conversation_log import conversation_log
+from src.conversation.npc_records import NpcRecords
 from src.conversation.action import Action
 from src.llm.sentence_queue import SentenceQueue
 from src.llm.sentence import Sentence
@@ -170,6 +172,7 @@ class Conversation:
                     time.sleep(0.01)
             if FunctionManager.any_action_requires_response(next_sentence.actions):
                 self.__awaiting_action_result = True
+            self.__apply_action_effects(next_sentence)
             return comm_consts.KEY_REPLYTYPE_NPCACTION, next_sentence
         elif next_sentence and len(next_sentence.text) > 0:
             if {'identifier': comm_consts.ACTION_REMOVECHARACTER} in next_sentence.actions:
@@ -189,6 +192,7 @@ class Conversation:
             self.last_sentence_audio_length = next_sentence.voice_line_duration + self.__context.config.wait_time_buffer
             self.__last_sentence_voice_duration = next_sentence.voice_line_duration
             self.last_sentence_start_time = time.time()
+            self.__apply_action_effects(next_sentence)
             return comm_consts.KEY_REPLYTYPE_NPCTALK, next_sentence
         else:
             # Check if end conversation was requested via tool call
@@ -221,6 +225,79 @@ class Conversation:
                                 return self.__interrupt_response(had_more_to_say=False)
                             time.sleep(0.01)
                     return comm_consts.KEY_REPLYTYPE_PLAYERTALK, None
+
+    def __apply_action_effects(self, sentence: Sentence) -> None:
+        """Some actions also change what Mantella knows about NPCs: a name an NPC gave themselves (TellName), or that an NPC
+        travels with the player (Follow / Unfollow). PermitTaking is limited to items that do belong to the NPC"""
+        if not sentence or not sentence.actions:
+            return
+        try:
+            records = NpcRecords(conversation_log.game_path, self.__context.world_id)
+            for action in sentence.actions:
+                if not isinstance(action, dict):
+                    continue
+                identifier = action.get('identifier')
+                arguments = action.get('arguments') if isinstance(action.get('arguments'), dict) else {}
+                npcs = self.__get_action_npcs(arguments, sentence.speaker)
+                if identifier == comm_consts.ACTION_NPC_TELLNAME:
+                    for npc in npcs[:1]:
+                        self.__rename_npc(records, npc, NpcRecords.clean_name(arguments.get('name')))
+                elif identifier == comm_consts.ACTION_NPC_FOLLOW:
+                    for npc in npcs:
+                        records.set_companion(npc.ref_id, str(arguments.get('purpose') or '').strip(), str(arguments.get('destination') or '').strip())
+                elif identifier == comm_consts.ACTION_NPC_UNFOLLOW:
+                    for npc in npcs:
+                        records.remove_companion(npc.ref_id)
+                elif identifier == comm_consts.ACTION_NPC_PERMITTAKING and npcs:
+                    owned = npcs[0].get_custom_character_value(comm_consts.KEY_ACTOR_OWNEDITEMS)
+                    arguments['items'] = self.match_owned_items(arguments.get('items'), owned if isinstance(owned, list) else [])
+                    action['arguments'] = arguments
+        except Exception as e:
+            logger.warning(f'Could not apply the effects of an action: {e}')
+
+    def __get_action_npcs(self, arguments: dict, speaker: Character | None) -> list[Character]:
+        """The NPCs an action is for: those named in its arguments, else the one who spoke"""
+        names = arguments.get('source')
+        names = names if isinstance(names, list) else [names] if isinstance(names, str) else []
+        npcs: list[Character] = []
+        for name in names:
+            try:
+                npc = self.__context.npcs_in_conversation.get_character_by_name(str(name))
+            except KeyError:
+                continue
+            if npc and not npc.is_player_character:
+                npcs.append(npc)
+        if not npcs and speaker and not speaker.is_player_character:
+            npcs.append(speaker)
+        return npcs
+
+    def __rename_npc(self, records: NpcRecords, npc: Character, new_name: str) -> None:
+        """An NPC without a name of their own told the player their name: from now on they are known by it, also to their memories"""
+        if not new_name or new_name == npc.name or npc.get_custom_character_value(comm_consts.KEY_ACTOR_ISUNIQUE) is True:
+            return
+        old_name = npc.name
+        records.set_given_name(npc.ref_id, new_name)
+        records.move_memories(npc.ref_id, old_name, new_name)
+        if self.__context.npcs_in_conversation.rename_character(old_name, new_name):
+            self.__context.add_ingame_event(f"From now on, {old_name} is called {new_name}.")
+            logger.log(23, f'{old_name} is called {new_name} from now on')
+
+    @staticmethod
+    def match_owned_items(requested: Any, owned: list[str]) -> list[str]:
+        """The names of the NPC's belongings that the LLM meant (it may leave out or change a word): eg "salmon" -> "Salmon Meat".
+        Only belongings that are listed for the NPC count"""
+        requested_names = requested if isinstance(requested, list) else [requested] if isinstance(requested, str) else []
+        owned_names = [re.sub(r'\s*\(\d+\)$', '', str(item)).strip() for item in owned if str(item).strip()]
+        matched: list[str] = []
+        for wanted in requested_names:
+            wanted_text = re.sub(r'\s*\(\d+\)$', '', str(wanted)).strip().lower()
+            if not wanted_text:
+                continue
+            for name in owned_names:
+                lower = name.lower()
+                if (lower == wanted_text or wanted_text in lower or lower in wanted_text) and name not in matched:
+                    matched.append(name)
+        return matched
 
     def __interruption_enabled(self) -> bool:
         """Whether the player can interrupt NPC voicelines by speaking over them (mic input with interruptions enabled)"""

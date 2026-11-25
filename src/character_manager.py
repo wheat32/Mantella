@@ -245,6 +245,8 @@ class Character:
         return None
     
     def set_custom_character_value(self, key: str, value: Any):
+        if self.__custom_character_values is None: # characters the game sent no custom values for
+            self.__custom_character_values = {}
         self.__custom_character_values[key] = value
 
     def __eq__(self, other):

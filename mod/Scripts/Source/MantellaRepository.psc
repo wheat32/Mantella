@@ -40,6 +40,11 @@ float property playerSpeaksFirstRequestTime auto
 ; that a save was loaded during a conversation: that conversation belongs to the game that was left, and is not remembered
 int property playSessionId auto
 float property conversationLeaveDistance auto ; meters, 0 = NPCs never leave because of distance
+bool property noticeObjectsEnabled auto
+; NPCs traveling with the player for a purpose, and the place where it is met (see SetCompanionDestination)
+Actor[] companionActors
+string[] companionDestinations
+float property objectNoticeDistance auto ; meters
 
 Function StartNewPlaySession()
     playSessionId = Utility.RandomInt(1, 2147483646)
@@ -149,6 +154,10 @@ endEvent
 ; and add the corresponding default value here in a block corresponding to the version number like the examples below
 ; Doing it like this will only assign the defaul values to settings that haven't been initialized prior.
 function assignDefaultSettings(int lastVersion, bool isFirstInit = false)
+    If (lastVersion < 12 || isFirstInit)
+        noticeObjectsEnabled = true
+        objectNoticeDistance = 10
+    EndIf
     If (lastVersion < 11 || isFirstInit)
         conversationLeaveDistance = 20
     EndIf
@@ -314,6 +323,54 @@ function BindEndConversationHotkey(int keyCode)
     RegisterForKey(keyCode)
     RegisterAllHotkeys()
 endfunction
+
+; Remembers where an NPC who follows the player is going with them. When the player gets there, the NPC parts ways
+Function SetCompanionDestination(Actor companion, string destination)
+    if !companion
+        return
+    endIf
+    if !companionActors
+        companionActors = new Actor[10]
+        companionDestinations = new string[10]
+    endIf
+    int freeSlot = -1
+    int i = 0
+    while i < companionActors.Length
+        if companionActors[i] == companion
+            companionDestinations[i] = destination
+            return
+        elseIf freeSlot < 0 && (!companionActors[i] || companionDestinations[i] == "")
+            freeSlot = i
+        endIf
+        i += 1
+    endWhile
+    if freeSlot >= 0
+        companionActors[freeSlot] = companion
+        companionDestinations[freeSlot] = destination
+    endIf
+EndFunction
+
+; The companion still following the player whose destination is the given location, if any. They are forgotten after this,
+; so that arriving is noticed once
+Actor Function TakeArrivedCompanion(string locationName)
+    if !companionActors || locationName == ""
+        return None
+    endIf
+    int i = 0
+    while i < companionActors.Length
+        Actor companion = companionActors[i]
+        string destination = companionDestinations[i]
+        if companion && destination != "" && (StringUtil.Find(locationName, destination) >= 0 || StringUtil.Find(destination, locationName) >= 0)
+            companionActors[i] = None
+            companionDestinations[i] = ""
+            if companion.IsInFaction(giafac_following) && !companion.IsDead()
+                return companion
+            endIf
+        endIf
+        i += 1
+    endWhile
+    return None
+EndFunction
 
 ; Registers every key that is bound to one of the mod's controls. A key that is unregistered because one control no longer uses it
 ; would otherwise also stop working for another control that shares it

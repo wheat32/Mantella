@@ -287,7 +287,8 @@ class Summaries(Remembering):
         names = ', '.join(npc_names)
         return (f"\n\nImportant: {names} may not have known {player_name}'s name. Only use the name {player_name} in the summary if {player_name} "
                 f"said it in this conversation, it is in the previous summaries, or {names} clearly knew who {player_name} was (eg a courier sent to "
-                f"find them, or a fellow guild member). Otherwise refer to them as a stranger, describing them if that helps (eg by their race or what they wore).")
+                f"find them, or a fellow guild member). Otherwise describe them instead of naming them "
+                f"(eg 'a Nord with a hunting bow'), rather than calling them 'the stranger'.")
 
     @utils.time_it
     def __create_new_conversation_summary(self, npc_info: CharacterSummaryParameters, world_id: str, end_timestamp: float | None = None, min_messages: int = 5, player_name: str = "the player") -> str:
