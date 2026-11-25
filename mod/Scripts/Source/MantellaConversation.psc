@@ -42,7 +42,6 @@ float httpReceivedTime = 0.0
 string lineToSpeakError = "Error: No line transmitted for actor to speak"
 bool microphoneEnabledLastKnownStatus = false
 Actor[] _cachedNearbyActors = None
-bool _playerSpeaksFirst = false
 bool _awaitingPushToTalk = false
 bool _waitingForActionResponse = true
 int _actionResponseTimeout = 0
@@ -77,9 +76,22 @@ endEvent
 ;    Start new conversation   ;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-; Marks the next conversation as started by the player speaking to an NPC (free-flow talk key)
+; Marks the next conversation as started by the player speaking to an NPC (free-flow talk key).
+; Called before the conversation quest is started, which resets this script's variables: so it is kept in the repository
 Function SetPlayerSpeaksFirst(bool playerSpeaksFirst)
-    _playerSpeaksFirst = playerSpeaksFirst
+    if playerSpeaksFirst
+        repository.playerSpeaksFirstRequestTime = Utility.GetCurrentRealTime()
+    else
+        repository.playerSpeaksFirstRequestTime = 0.0
+    endIf
+EndFunction
+
+; Whether the conversation being started was started with the free-flow talk key. Only a request of the last few seconds counts,
+; so that one whose conversation never started does not apply to a later conversation
+bool Function TakePlayerSpeaksFirstRequest()
+    float requestTime = repository.playerSpeaksFirstRequestTime
+    repository.playerSpeaksFirstRequestTime = 0.0
+    return requestTime > 0.0 && Utility.GetCurrentRealTime() - requestTime < 10.0
 EndFunction
 
 function StartConversation(Actor[] actorsToStartConversationWith)
@@ -101,10 +113,9 @@ function StartConversation(Actor[] actorsToStartConversationWith)
     
     SKSE_HTTP.setString(handle, mConsts.KEY_REQUESTTYPE, mConsts.KEY_REQUESTTYPE_STARTCONVERSATION)
     SKSE_HTTP.setString(handle, mConsts.KEY_STARTCONVERSATION_WORLDID, PlayerRef.GetDisplayName() + repository.worldID)
-    if _playerSpeaksFirst
+    if TakePlayerSpeaksFirstRequest()
         ; Free-flow: the player is already talking, so the NPC does not open with a greeting
         SKSE_HTTP.setBool(handle, "mantella_player_speaks_first", true)
-        _playerSpeaksFirst = false
     endIf
     BuildContext(true)
     AddCurrentActorsAndContext(handle, true)
@@ -1063,6 +1074,13 @@ Function AddNotableItems(int customActorValuesHandle, Actor carrier)
     string[] notableItems = SKSE_HTTP.GetNotableItems(carrier, minimumGold, minimumItemValue, maximumItems)
     if notableItems.Length > 0
         SKSE_HTTP.setStringArray(customActorValuesHandle, mConsts.KEY_ACTOR_NOTABLEITEMS, notableItems)
+    endIf
+    ; what else they have, so that an NPC with nothing to give does not offer anything
+    string[] carriedKinds = SKSE_HTTP.GetCarriedItemKinds(carrier)
+    if carriedKinds.Length > 0
+        SKSE_HTTP.setStringArray(customActorValuesHandle, mConsts.KEY_ACTOR_CARRIEDKINDS, carriedKinds)
+    else
+        SKSE_HTTP.setBool(customActorValuesHandle, mConsts.KEY_ACTOR_CARRIESNOTHING, true)
     endIf
 EndFunction
 

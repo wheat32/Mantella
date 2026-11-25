@@ -134,16 +134,21 @@ class StartUI(routeable):
         delete_button.click(delete_memory, npc_dropdown, [npc_dropdown, memory_text, status])
 
     def __generate_console_section(self):
-        """Shows Mantella's console output below the settings, along with buttons to stop / restart Mantella"""
+        """Shows Mantella's console output below the settings, along with buttons to stop / restart Mantella.
+        The console can be collapsed. It starts out open in pre-release builds, where its output is what testing is about"""
         with gr.Column(elem_classes="console-section"):
             with gr.Row(elem_classes="console-header"):
-                gr.HTML('<h3 style="margin: 0;">Console</h3>')
+                control_status = gr.Markdown("")
                 restart_button = gr.Button("Restart Mantella", size='sm', scale=0, min_width=160)
                 stop_button = gr.Button("Stop Mantella", variant="stop", size='sm', scale=0, min_width=160)
-            control_status = gr.Markdown("")
-            gr.HTML('<div id="mantella-console" class="mantella-console" role="log" aria-label="Mantella console output"></div>')
+            with gr.Accordion(label="Console", open=self.is_console_open_by_default(utils.get_prerelease_label())):
+                gr.HTML('<div id="mantella-console" class="mantella-console" role="log" aria-label="Mantella console output"></div>')
             restart_button.click(process_control.restart_mantella, None, control_status)
             stop_button.click(process_control.stop_mantella, None, control_status)
+
+    @staticmethod
+    def is_console_open_by_default(prerelease_label: str) -> bool:
+        return bool(prerelease_label)
 
     # Polls the server for new log messages and appends them to the console panel
     CONSOLE_JS = """
@@ -174,6 +179,10 @@ class StartUI(routeable):
                     }
                     while (panel.childElementCount > 2000) { panel.removeChild(panel.firstChild); }
                     if (stickToBottom && data.entries.length) { panel.scrollTop = panel.scrollHeight; }
+                    // While the console is collapsed it cannot be scrolled. When it is opened again, it shows the newest lines
+                    const isVisible = panel.offsetParent !== null;
+                    if (isVisible && panel.dataset.wasHidden === '1') { panel.scrollTop = panel.scrollHeight; }
+                    panel.dataset.wasHidden = isVisible ? '0' : '1';
                 } catch (error) {
                     if (!wasOffline) {
                         wasOffline = true;

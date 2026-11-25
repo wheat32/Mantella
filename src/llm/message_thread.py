@@ -116,6 +116,14 @@ class message_thread():
     def get_last_message(self) -> Message:
         return self.__messages[len(self.__messages) -1]
 
+    def remove_message(self, message: Message) -> bool:
+        """Removes a message from the thread (the system message is never removed)"""
+        for index in range(len(self.__messages) - 1, 0, -1):
+            if self.__messages[index] is message:
+                del self.__messages[index]
+                return True
+        return False
+
     @utils.time_it
     def get_last_assistant_message(self) -> AssistantMessage | None:
         for message in reversed(self.__messages):

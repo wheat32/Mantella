@@ -531,6 +531,20 @@ class ChatManager:
                     if not self.__config.narration_handling == NarrationHandlingEnum.CUT_NARRATIONS or pending_sentence.sentence_type != SentenceTypeEnum.NARRATION:
                         new_sentence = self.generate_sentence(pending_sentence)
                         blocking_queue.put(new_sentence)
+
+                # An action keyword the LLM put at the very end ("... what you're after.\n\nInventory:") never becomes a sentence
+                # of its own, and was lost. Such actions, and those that wait for the NPC to finish speaking, are passed on last
+                try:
+                    actions_in_chain = [parser for parser in parser_chain if isinstance(parser, actions_parser)]
+                    remaining_text = accumulator.take_remaining_text()
+                    if actions_in_chain and remaining_text.strip() and ':' in remaining_text:
+                        _, trailing_actions = actions_in_chain[0].find_actions_in_text(remaining_text)
+                        for action in trailing_actions:
+                            actions_in_chain[0].add_action(action, None, settings)
+                    if settings.deferred_actions:
+                        blocking_queue.put(Sentence(SentenceContent(settings.current_speaker, "", SentenceTypeEnum.SPEECH, True, list(settings.deferred_actions)), "", 0))
+                except Exception as e:
+                    logger.debug(f'Could not pass on the actions at the end of the response: {e}')
                 logger.log(23, f"Full raw response ({active_client.get_count_tokens(raw_response)} tokens): {raw_response.strip()}")
                 blocking_queue.is_more_to_come = False
                 # This sentence is required to make sure there is one in case the game is already waiting for it

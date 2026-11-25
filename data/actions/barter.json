@@ -11,7 +11,7 @@
         }
     },
     "required": ["source"],
-    "prompt": "To show the player what you have for sale, begin your response with '{key}:'.",
+    "prompt": "If you sell things for a living and the player wants to trade, begin your response with '{key}:' to show them what you have for sale. A merchant is glad of a customer, stranger or not, and only refuses to trade with someone who has done something terrible to them or their family. If you are not a merchant, you have no wares to show.",
     "allowed_games": ["skyrim"],
     "requires_response": false,
     "is-interrupting": false,

@@ -323,6 +323,7 @@ class Transcriber:
         
         # Speech detection state
         self._speech_detected = False
+        self._speech_start_time: float | None = None # when the current speech began (key pressed / voice detected)
         # Stays True from a finalized non-empty transcription until it is consumed by get_latest_transcription
         self._has_unconsumed_transcription = False
         self._speech_end_time = 0
@@ -358,6 +359,13 @@ class Transcriber:
         with self._lock:
             return self._speech_detected or self._has_unconsumed_transcription
     
+    @property
+    def speech_start_time(self) -> float | None:
+        """When the player began the speech that is being (or was last) heard: the key press with push-to-talk, else the
+        moment the voice was detected. None if nothing has been heard yet"""
+        with self._lock:
+            return self._speech_start_time
+
     def set_temporary_pause(self, pause_seconds: float) -> None:
         """Set a temporary pause threshold override for the next transcription
         
@@ -639,6 +647,7 @@ If you would prefer to run speech-to-text locally, please ensure the `Speech-to-
                 logger.log(self.loglevel, 'PTT pressed')
                 self._ptt_active = True
                 self._speech_detected = True
+                self._speech_start_time = time.time()
                 self._last_update_time = time.time()
         elif self._ptt_active:
             # Key released after being held — attempt transcription
@@ -688,6 +697,7 @@ If you would prefer to run speech-to-text locally, please ensure the `Speech-to-
         if probability > self.audio_threshold and not self._speech_detected:
             logger.log(self.loglevel, 'Speech detected')
             self._speech_detected = True
+            self._speech_start_time = time.time()
 
         effective_pause = self._temporary_pause_override if self._temporary_pause_override is not None else self.pause_threshold
         if probability <= self.audio_threshold and self._speech_detected and time.time() - self._last_update_time > effective_pause:
@@ -913,6 +923,7 @@ If you would prefer to run speech-to-text locally, please ensure the `Speech-to-
                 # still talking: the rest is appended as it is recorded, and transcribed when the key is released
                 self._ptt_active = True
                 self._speech_detected = True
+                self._speech_start_time = time.time()
                 self._last_update_time = time.time()
             elif len(audio) / self.SAMPLING_RATE >= self.MIN_PTT_DURATION:
                 logger.log(self.loglevel, 'Transcribing what was said while the conversation was starting')

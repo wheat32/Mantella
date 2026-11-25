@@ -782,6 +782,7 @@ bool Bind(RE::BSScript::IVirtualMachine* vm)
     vm->RegisterFunction("SetScreenshotMessageVisible", className, SetScreenshotMessageVisible);
     vm->RegisterFunction("DumpDialogueOptions", className, DialogueOptions::Dump);
     vm->RegisterFunction("GetNotableItems", className, NotableItems::Get);
+    vm->RegisterFunction("GetCarriedItemKinds", className, NotableItems::GetKinds);
     vm->RegisterFunction("GetRaceDefaultVoiceType", className, GetRaceDefaultVoiceType);
     vm->RegisterFunction("SetRaceDefaultVoiceType", className, SetRaceDefaultVoiceType);
     vm->RegisterFunction("StopVoiceLine", className, StopVoiceLine);

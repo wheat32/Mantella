@@ -21,6 +21,8 @@ class sentence_generation_settings:
         self.__interrupting_action: bool = False
         self.__vision_requested: bool = False
         self.__discarded_character_name: str | None = None
+        # Actions that only run once the NPC has finished speaking (eg opening their inventory), see actions_parser
+        self.deferred_actions: list[dict] = []
     
     @property
     def sentence_type(self) -> SentenceTypeEnum:

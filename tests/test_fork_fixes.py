@@ -510,3 +510,90 @@ def test_system_information_printed_at_startup(tmp_path, monkeypatch):
     printed = system_info.format_system_info(info)
     assert printed[0] == '=== Mantella starting ===' and set(printed[-1]) == {'='}
     assert len({line.index(' : ') for line in printed[1:-1]}) == 1 # the values line up
+
+
+def test_interruptions_are_told_apart():
+    """Speaking as the NPC finishes a line is not talking over them, and only cutting into a line is described as such"""
+    from src.conversation.conversation import Conversation
+    kind = Conversation.get_interruption_kind
+    # the line started at 100 and lasts 5 seconds
+    assert kind(101.0, 101.2, 100.0, 5.0, True, 1.0) == 'mid_line'
+    assert kind(104.5, 105.0, 100.0, 5.0, True, 1.0) == 'between_lines' # within the last second: practically finished
+    assert kind(106.0, 106.1, 100.0, 5.0, True, 1.0) == 'between_lines' # in the pause before the next line
+    assert kind(106.0, 106.1, 100.0, 5.0, False, 1.0) is None # the NPC had nothing more to say
+    assert kind(None, 101.0, 100.0, 5.0, True, 1.0) == 'mid_line' # without a start time, the moment it was noticed counts
+
+    text = Conversation.get_interruption_event_text
+    assert text('Nick', 'Fisherman', None) == ''
+    assert 'cut in while Fisherman was still speaking' in text('Nick', 'Fisherman', 'mid_line')
+    assert 'interrupted' not in text('Nick', 'Fisherman', 'between_lines') and 'left the rest unsaid' in text('Nick', 'Fisherman', 'between_lines')
+
+
+def test_unplayed_sentence_is_taken_back(default_config, example_skyrim_npc_character):
+    """A line that was never played because the player spoke first is not part of what the NPC said"""
+    from src.llm.messages import AssistantMessage
+    from src.llm.message_thread import message_thread
+    from src.llm.sentence import Sentence
+    from src.llm.sentence_content import SentenceContent, SentenceTypeEnum
+    thread = message_thread(default_config, "system")
+    message = AssistantMessage(default_config)
+    thread.add_message(message)
+    played = Sentence(SentenceContent(example_skyrim_npc_character, "I didn't know it.", SentenceTypeEnum.SPEECH), "", 1.0)
+    unplayed = Sentence(SentenceContent(example_skyrim_npc_character, "You said Nick, didn't you?", SentenceTypeEnum.SPEECH), "", 1.0)
+    message.add_sentence(played)
+    message.add_sentence(unplayed)
+    assert message.remove_sentence(unplayed)
+    assert "Nick" not in message.get_formatted_content() and message.sentence_count == 1
+    assert not message.remove_sentence(unplayed)
+    assert thread.remove_message(message) and len(thread) == 1
+    assert not thread.remove_message(thread[0]) # the system message stays
+
+
+def test_what_npcs_carry_and_who_knows_the_player():
+    from src.conversation.context import Context
+    from src.remember.summaries import Summaries
+    description = Context.get_notable_items_description('Fisherman', None, ['food', 'odds and ends'])
+    assert 'food, odds and ends' in description and 'does not make up others' in description
+    nothing = Context.get_notable_items_description('Fisherman', [], None, True)
+    assert 'nothing to give' in nothing
+    assert Context.get_notable_items_description('Fisherman', None, None, None) == ''
+
+    note = Context.get_unknown_player_name_note('Nick', ['Fisherman'])
+    assert "Fisherman only does if Nick has told it" in note and "a courier sent to find Nick" in note
+    assert Context.get_unknown_player_name_note('Nick', []) == ''
+    relationships = Context.get_relationships_note('Nick', [('Nazeem', 'a stranger'), ('Lydia', 'a friend')])
+    assert 'to Nazeem, Nick is a stranger and to Lydia, Nick is a friend' in relationships
+    assert 'Only use the name Nick' in Summaries.get_unknown_player_name_summary_note('Nick', ['Fisherman'])
+    assert Summaries.get_unknown_player_name_summary_note('Nick', []) == ''
+
+
+def test_actions_at_the_end_of_a_response(example_skyrim_npc_character):
+    """A lone "Inventory:" at the end is not lost, and actions that open a menu wait for the NPC to finish"""
+    from src.llm.output.actions_parser import actions_parser
+    from src.llm.output.output_parser import sentence_generation_settings
+    from src.llm.output.sentence_accumulator import sentence_accumulator
+    from src.llm.sentence_content import SentenceContent, SentenceTypeEnum
+    from src.conversation.action import Action
+    def make_action(identifier, keyword):
+        return Action(identifier=identifier, name=keyword, keyword=keyword, description="", prompt_text="", requires_response=False,
+                      is_interrupting=False, one_on_one=True, multi_npc=True, radiant=True)
+    parser = actions_parser([make_action('mantella_npc_inventory', 'Inventory'), make_action('mantella_npc_follow', 'Follow')])
+    settings = sentence_generation_settings(example_skyrim_npc_character)
+
+    text, found = parser.find_actions_in_text("\n\ninventory :")
+    assert text == '' and [a.identifier for a in found] == ['mantella_npc_inventory']
+
+    sentence = SentenceContent(example_skyrim_npc_character, "Inventory: Right, let's see.", SentenceTypeEnum.SPEECH)
+    parsed, _ = parser.modify_sentence_content(sentence, None, settings)
+    assert parsed.text == "Right, let's see." and parsed.actions == [] # waits for the end of the response
+    assert settings.deferred_actions == [{'identifier': 'mantella_npc_inventory'}]
+    sentence = SentenceContent(example_skyrim_npc_character, "Follow: Lead the way.", SentenceTypeEnum.SPEECH)
+    parsed, _ = parser.modify_sentence_content(sentence, None, settings)
+    assert parsed.actions == [{'identifier': 'mantella_npc_follow'}] # other actions happen right away
+
+    accumulator = sentence_accumulator(['.', '?', '!', ':'])
+    accumulator.accumulate("Take a look.\n\nInventory:")
+    assert accumulator.has_next_sentence()
+    accumulator.get_next_sentence()
+    assert 'Inventory:' in accumulator.take_remaining_text()
+    assert accumulator.take_remaining_text() == ''

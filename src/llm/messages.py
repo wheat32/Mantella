@@ -111,6 +111,22 @@ class AssistantMessage(Message):
     
     def add_sentence(self, new_sentence: Sentence):
         self.__sentences.append(new_sentence.content)
+
+    def remove_sentence(self, sentence: Sentence) -> bool:
+        """Takes a sentence back out of the message (eg one that was never played because the player interrupted)
+
+        Returns:
+            bool: whether the sentence was part of the message
+        """
+        for index in range(len(self.__sentences) - 1, -1, -1):
+            if self.__sentences[index] is sentence.content:
+                del self.__sentences[index]
+                return True
+        return False
+
+    @property
+    def sentence_count(self) -> int:
+        return len(self.__sentences)
     
     @property
     def tool_calls(self) -> list[dict] | None:

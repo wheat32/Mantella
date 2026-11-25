@@ -68,6 +68,8 @@ Int Function DumpDialogueOptions(Actor speaker) global native
 ; The notable things the actor carries, the most interesting first: a lot of gold, notes and maps (with their description),
 ; keys, valuable items and books. What is worn or wielded is left out
 String[] Function GetNotableItems(Actor carrier, Int minimumGold, Int minimumItemValue, Int maximumItems) global native
+; The kinds of things the actor carries besides what they wear and wield ("food", "potions", "gold", ...). Empty if nothing
+String[] Function GetCarriedItemKinds(Actor carrier) global native
 VoiceType Function GetVoiceType(Actor actor) global native
 Function SetVoiceType(Actor actor, VoiceType voice) global native
 VoiceType Function GetRaceDefaultVoiceType(Actor actor) global native

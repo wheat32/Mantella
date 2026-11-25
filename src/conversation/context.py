@@ -6,7 +6,7 @@ from src.characters_manager import Characters
 from src.remember.remembering import Remembering
 from src import utils
 from src.utils import get_time_group
-from src.character_manager import Character, get_genders_text, get_races_text, get_genders_and_races_text
+from src.character_manager import Character, get_genders_text, get_races_text, get_genders_and_races_text, knows_player_name
 from src.config.config_loader import ConfigLoader
 from src.llm.llm_client import LLMClient
 from src.config.definitions.game_definitions import GameEnum
@@ -404,29 +404,43 @@ class Context:
         equipment_descriptions = []
         for character in self.__npcs_in_conversation.get_non_player_characters():
                 equipment_descriptions.append(character.equipment.get_equipment_description(character.name))
-                notable_items_description = self.get_notable_items_description(character.name, character.get_custom_character_value(communication_constants.KEY_ACTOR_NOTABLEITEMS))
+                notable_items_description = self.get_notable_items_description(character.name, character.get_custom_character_value(communication_constants.KEY_ACTOR_NOTABLEITEMS),
+                                                                               character.get_custom_character_value(communication_constants.KEY_ACTOR_CARRIEDKINDS),
+                                                                               character.get_custom_character_value(communication_constants.KEY_ACTOR_CARRIESNOTHING))
                 if notable_items_description:
                     equipment_descriptions.append(notable_items_description)
         return " ".join(description for description in equipment_descriptions if description)
 
     @staticmethod
-    def get_notable_items_description(name: str, notable_items: Any) -> str:
-        """Describes the notable things an NPC carries (a lot of gold, notes, maps, keys, valuables), as reported by the game
+    def get_notable_items_description(name: str, notable_items: Any, carried_kinds: Any = None, carries_nothing: Any = None) -> str:
+        """Describes the notable things an NPC carries (a lot of gold, notes, maps, keys, valuables) and what else they have, as reported by the game
 
         Args:
             name (str): the name of the NPC
-            notable_items (Any): the list of item names the game sent for the NPC, if any
+            notable_items (Any): the list of notable item names the game sent for the NPC, if any
+            carried_kinds (Any): the list of the kinds of things the NPC carries besides what they wear and wield ("food", "potions", ...), if sent
+            carries_nothing (Any): True if the game reported that the NPC carries nothing besides what they wear and wield
 
         Returns:
-            str: a sentence for the prompt, empty if the NPC carries nothing notable
+            str: sentences for the prompt, empty if the game sent nothing about it
         """
-        if not isinstance(notable_items, list):
-            return ''
-        items = [str(item).strip() for item in notable_items if str(item).strip()]
-        if not items:
-            return ''
-        return f"{name} carries: {', '.join(items)}. These are {name}'s own belongings, which {name} knows about and may bring up now and then where it fits the conversation, without having to."
-    
+        def to_list(value: Any) -> list[str]:
+            if not isinstance(value, list):
+                return []
+            return [str(item).strip() for item in value if str(item).strip()]
+
+        items = to_list(notable_items)
+        kinds = to_list(carried_kinds)
+        sentences: list[str] = []
+        if items:
+            sentences.append(f"{name} carries: {', '.join(items)}. These are {name}'s own belongings, which {name} knows about and may bring up now and then where it fits the conversation, without having to.")
+        if kinds:
+            sentences.append(f"Apart from what {name} wears and wields, {name} has these kinds of things with them: {', '.join(kinds)}. "
+                             f"{name} only offers or mentions belongings of these kinds, and does not make up others.")
+        elif carries_nothing is True and not items:
+            sentences.append(f"{name} carries nothing apart from what they wear and wield, so {name} has nothing to give, lend or trade, and says so if asked.")
+        return " ".join(sentences)
+
     @utils.time_it
     def __get_action_texts(self, actions: list[Action]) -> str:
         """Generates the prompt text for the available actions
@@ -492,6 +506,45 @@ class Context:
         if removed_count == 0:
             return conversation_summaries, 0
         return '\n'.join(line for index, line in enumerate(lines) if index not in lines_to_remove), removed_count
+
+    @staticmethod
+    def knows_player_name(npc: Character) -> bool:
+        return knows_player_name(npc)
+
+    @staticmethod
+    def get_relationships_note(player_name: str, relationships: list[tuple[str, str]]) -> str:
+        """Tells the LLM how each NPC stands with the player (eg "a stranger", "a friend"), which decides how far they trust them,
+        eg whether they let the player see their belongings
+
+        Args:
+            player_name (str): the name of the player
+            relationships (list[tuple[str, str]]): per NPC their name and what the player is to them
+
+        Returns:
+            str: a paragraph to add to the system prompt, empty if there are no NPCs
+        """
+        if not relationships or not player_name:
+            return ''
+        listing = Context.format_listing([f"to {npc_name}, {player_name} is {trust}" for npc_name, trust in relationships])
+        return (f"\n\nHow they stand with {player_name}: {listing}. This decides how far they trust {player_name}, eg whether they share "
+                f"their belongings or secrets, unless the conversation changes their mind.")
+
+    @staticmethod
+    def get_unknown_player_name_note(player_name: str, npc_names: list[str]) -> str:
+        """Tells the LLM which NPCs do not know the player's name yet. The name is still in the prompt, so that the LLM knows
+        who the player is, but NPCs who have not been told it do not use it
+
+        Returns:
+            str: a paragraph to add to the system prompt, empty if every NPC knows the name
+        """
+        if not npc_names or not player_name:
+            return ''
+        names = Context.format_listing(npc_names)
+        verb = "does" if len(npc_names) == 1 else "do"
+        return (f"\n\nNot everyone knows {player_name}'s name. {names} only {verb} if {player_name} has told it (in this conversation, or one "
+                f"{names} remember{'s' if len(npc_names) == 1 else ''}), or if who {names} {'is' if len(npc_names) == 1 else 'are'} and what has happened in the story would have told them: "
+                f"eg a courier sent to find {player_name}, fellow members of a guild {player_name} has joined, or someone who has sought "
+                f"{player_name} out or been watching them. Otherwise {names} {verb} not call {player_name} by name, say it, or claim to have heard it.")
 
     @staticmethod
     def get_numbered_names_note(names: list[str]) -> str:
@@ -578,6 +631,9 @@ class Context:
         logger.log(23, f'Maximum size of prompt is {self.__client.token_limit} x {self.TOKEN_LIMIT_PERCENT} = {max_prompt_tokens} tokens.')
 
         numbered_names_note = self.get_numbered_names_note([character.name for character in non_player_chars])
+        if player:
+            numbered_names_note += self.get_unknown_player_name_note(player.name, [character.name for character in non_player_chars if not self.knows_player_name(character)])
+            numbered_names_note += self.get_relationships_note(player.name, [(character.name, self.__get_trust(character)) for character in non_player_chars])
 
         def build_prompt(bios_text: str, summaries_text: str) -> str:
             return prompt.format(
