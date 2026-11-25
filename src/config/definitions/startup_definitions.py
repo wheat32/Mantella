@@ -13,6 +13,13 @@ class StartupDefinitions:
         return ConfigValueBool("play_startup_sound", "Play Startup Sound", description, True, tags=[ConfigValueTag.share_row])
     
     @staticmethod
+    def get_check_for_updates_config_value() -> ConfigValue:
+        description = """Whether to check GitHub for a newer version of Mantella when it starts, and say so at the top of this page and in the console.
+                        On a normal release, only newer normal releases are mentioned. On a pre-release (alpha / beta), newer pre-releases are mentioned too.
+                        Only GitHub's public list of releases is requested; nothing is sent along."""
+        return ConfigValueBool("check_for_updates", "Check for Updates", description, True)
+
+    @staticmethod
     def get_remove_mei_folders_config_value() -> ConfigValue:
         description = """Clean up older instances of Mantella runtime folders from /data/tmp/_MEIxxxxxx.
                                             These folders build up over time when Mantella.exe is run.

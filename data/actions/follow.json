@@ -1,20 +1,35 @@
 {
     "identifier": "mantella_npc_follow",
     "name": "Follow",
-    "description": "Make NPC(s) follow the player.",
-    "note": "EXPERIMENTAL: May cause NPC AI packages to break.",
+    "description": "Make NPC(s) travel with the player for a purpose they share, eg heading the same way, being paid or protected, or helping a friend. Only agree if it suits you: a stranger asking with no reason gets a no. You have a life of your own and only come along for that purpose.",
     "key": "Follow",
     "parameters": {
         "source": {
             "type": "array",
             "description": "The NPC(s) willing to follow.",
-            "items": {"type": "string"},
+            "items": {
+                "type": "string"
+            },
             "scope": "conversation"
+        },
+        "purpose": {
+            "type": "string",
+            "description": "Why the NPC comes along, eg 'traveling to Riverwood together' or 'paid to guard the player to Whiterun'."
+        },
+        "destination": {
+            "type": "string",
+            "description": "The place where the purpose is met and the NPC goes their own way again, if there is one (eg 'Riverwood'). Leave empty if there is none."
         }
     },
-    "required": ["source"],
-    "prompt": "If the player asks you to follow them, and you are thoroughly convinced to do so, begin your response with '{key}:'",
-    "allowed_games": ["skyrim","Fallout4"],
+    "required": [
+        "source",
+        "purpose"
+    ],
+    "prompt": "If the player asks you to come along with them, and you share a purpose (eg you are heading the same way, they pay or protect you, or you are friends), begin your response with '{key}:'. A stranger asking with no reason gets a no. You have a life of your own and only come along for that purpose.",
+    "allowed_games": [
+        "skyrim",
+        "Fallout4"
+    ],
     "requires_response": false,
     "is-interrupting": false,
     "allow_repeat": false,

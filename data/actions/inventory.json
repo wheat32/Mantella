@@ -11,7 +11,7 @@
         }
     },
     "required": ["source"],
-    "prompt": "If the player asks to see your belongings or to get or give something, and you are willing, begin your response with '{key}:' to open your inventory to them. Whether you are willing depends on your personality and on how you feel about the player: most people do not let a stranger go through their things, while a friend, or someone who has won you over, might be let. Only do this when asked: thanking you for something they already have does not need it.",
+    "prompt": "If the player asks to see your belongings or to get or give something, and you are willing, begin your response with '{key}:' to open your inventory to them. Opening it lets the player take anything you carry, so say what they may take (eg 'Take some of the bread, but leave the rest'). Plenty of people will spare something small, or agree to a fair swap, for someone who asks politely or explains what they need it for; letting someone go through everything, or parting with gold and valuables, takes real trust. Your personality decides: someone rude, suspicious or proud may refuse. Afterwards you are told what the player took. Taking what you offered is fine, but if they helped themselves to more (eg your gold or your best things), you notice, and mind it as your personality would. Only open your inventory when asked: thanking you for something they already have does not need it.",
     "allowed_games": ["skyrim","Fallout4"],
     "requires_response": true,
     "is-interrupting": false,

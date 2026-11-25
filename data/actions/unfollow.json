@@ -1,19 +1,26 @@
 {
     "identifier": "mantella_npc_unfollow",
     "name": "Unfollow",
-    "description": "Make NPC(s) stop following the player.",
+    "description": "Make NPC(s) stop following the player and go back to their own life: when the purpose they came along for is met, or when the player no longer needs them.",
     "key": "Unfollow",
     "parameters": {
         "source": {
             "type": "array",
             "description": "The NPC(s) to stop following.",
-            "items": {"type": "string"},
+            "items": {
+                "type": "string"
+            },
             "scope": "conversation"
         }
     },
-    "required": ["source"],
-    "prompt": "If the player asks you to stop following them, begin your response with '{key}:'",
-    "allowed_games": ["skyrim","Fallout4"],
+    "required": [
+        "source"
+    ],
+    "prompt": "If the player asks you to stop following them, or the purpose you came along for is met, begin your response with '{key}:' and say goodbye.",
+    "allowed_games": [
+        "skyrim",
+        "Fallout4"
+    ],
     "requires_response": false,
     "is-interrupting": false,
     "allow_repeat": false,

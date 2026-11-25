@@ -52,6 +52,18 @@ class Characters:
             self.__active_characters[new_character.name].relationship_rank = new_character.relationship_rank
             self.__active_characters[new_character.name].custom_character_values = new_character.custom_character_values
     
+    def rename_character(self, old_name: str, new_name: str) -> Character | None:
+        """Gives a character a new name (eg one an NPC without a name of their own gave themselves)"""
+        character = self.__active_characters.get(old_name)
+        if character is None or new_name in self.__active_characters:
+            return None
+        del self.__active_characters[old_name]
+        character.name = new_name
+        self.__active_characters[new_name] = character
+        if self.__all_characters_since_start.pop(old_name, None) is not None:
+            self.__all_characters_since_start[new_name] = character
+        return character
+
     @utils.time_it
     def remove_character(self, character_to_remove: Character, message_count: int = 0):
         if character_to_remove.name in self.__active_characters:

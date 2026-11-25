@@ -69,6 +69,12 @@ string property KEY_ACTOR_NOTABLEITEMS = "mantella_actor_notable_items" auto
 string property KEY_ACTOR_CARRIEDKINDS = "mantella_actor_carried_kinds" auto
 string property KEY_ACTOR_CARRIESNOTHING = "mantella_actor_carries_nothing" auto
 string property KEY_ACTOR_ISUNIQUE = "mantella_actor_is_unique" auto
+string property KEY_ACTOR_NEARBYOBJECTS = "mantella_actor_nearby_objects" auto
+string property KEY_ACTOR_NEARBYOBJECTSCHECKED = "mantella_actor_nearby_objects_checked" auto
+string property KEY_ACTOR_OWNEDITEMS = "mantella_actor_owned_items_nearby" auto
+string property KEY_ACTOR_BASENAME = "mantella_actor_base_name" auto
+string property ACTION_NPC_TELLNAME = "mantella_npc_tellname" auto
+string property ACTION_NPC_PERMITTAKING = "mantella_npc_permittaking" auto
 
 string property KEY_ACTOR_PC_DESCRIPTION = "mantella_pc_description" auto
 string property KEY_ACTOR_PC_VOICEPLAYERINPUT = "mantella_pc_voiceplayerinput" auto

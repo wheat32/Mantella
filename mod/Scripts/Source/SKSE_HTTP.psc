@@ -70,6 +70,13 @@ Int Function DumpDialogueOptions(Actor speaker) global native
 String[] Function GetNotableItems(Actor carrier, Int minimumGold, Int minimumItemValue, Int maximumItems) global native
 ; The kinds of things the actor carries besides what they wear and wield ("food", "potions", "gold", ...). Empty if nothing
 String[] Function GetCarriedItemKinds(Actor carrier) global native
+; The notable objects within the distance (in meters) of the actor, nearest first, eg "a burning campfire (3 m)"
+String[] Function GetNearbyObjects(Actor center, Float maxDistanceMeters, Int maxCount) global native
+; The items within the distance (in meters) of the actor that belong to them (or their faction), eg "Salmon Meat (3)"
+String[] Function GetOwnedItemsNearby(Actor owner, Float maxDistanceMeters, Int maxCount) global native
+; Makes the player the owner of the actor's items within the distance whose names are listed, so that taking them is not stealing.
+; Returns how many items the player may now take
+Int Function AllowTakingOwnedItems(Actor owner, String[] itemNames, Float maxDistanceMeters) global native
 VoiceType Function GetVoiceType(Actor actor) global native
 Function SetVoiceType(Actor actor, VoiceType voice) global native
 VoiceType Function GetRaceDefaultVoiceType(Actor actor) global native

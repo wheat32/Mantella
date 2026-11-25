@@ -32,12 +32,43 @@ def _scan_action_names() -> list[str]:
 
 
 class ActionDefinitions:
+    ADVANCED_ACTIONS_AUTOMATIC = "Automatic"
+    ADVANCED_ACTIONS_ON = "On"
+    ADVANCED_ACTIONS_OFF = "Off"
+    # Model families (as named by OpenRouter / NanoGPT) that are known to support tool calling
+    TOOL_CALLING_MODEL_PREFIXES = ("anthropic/", "openai/", "google/", "x-ai/", "mistralai/", "deepseek/", "qwen/", "moonshotai/", "z-ai/", "claude", "gpt-", "gemini")
+
     @staticmethod
-    def get_advanced_actions_enabled_config_value() -> ConfigValue:
-        description = """If enabled, LLMs with tool calling capabilities can trigger advanced in-game actions.
-                        If disabled, only basic actions can be triggered by the LLM using an '[action_name]: [NPC response]' format (eg 'Follow: Lead the way').
-                        Actions without a 'prompt' field defined in the action's JSON file (see data/actions/) can only be triggered when this setting is enabled."""
-        return ConfigValueBool("advanced_actions_enabled", "Advanced Actions", description, False)
+    def get_advanced_actions_config_value() -> ConfigValue:
+        description = """With Advanced Actions, the LLM triggers in-game actions as tools, with details such as who, where or what (eg which items an NPC lets the player take, or where an NPC is going with the player). Some actions only exist this way.
+                        Without them, only basic actions can be triggered, by the LLM starting its response with the action's name (eg 'Follow: Lead the way'), and without details.
+                        Automatic: on for LLMs that are known to support tool calling (Claude, GPT, Gemini and other large models), off for others (eg local models). On / Off: always on or off.
+                        Advanced Actions describe every available action to the LLM with each request, which adds to the size of requests (prompt caching keeps the cost of this low)."""
+        options = [ActionDefinitions.ADVANCED_ACTIONS_AUTOMATIC, ActionDefinitions.ADVANCED_ACTIONS_ON, ActionDefinitions.ADVANCED_ACTIONS_OFF]
+        return ConfigValueSelection("advanced_actions", "Advanced Actions", description, ActionDefinitions.ADVANCED_ACTIONS_AUTOMATIC, options)
+
+    @staticmethod
+    def get_legacy_advanced_actions_enabled_config_value() -> ConfigValue:
+        # Replaced by `advanced_actions`. Still defined (hidden, and not used) so that a config.ini that has it is read without complaint
+        return ConfigValueBool("advanced_actions_enabled", "Advanced Actions (old setting)", "Replaced by Advanced Actions.", False, is_hidden=True)
+
+    @staticmethod
+    def is_tool_calling_supported(llm_service: str, model: str) -> bool:
+        """Whether the LLM is known to support tool calling, which Advanced Actions need"""
+        service = str(llm_service or '').strip().lower()
+        if service in ('anthropic', 'openai'):
+            return True
+        if service in ('openrouter', 'nanogpt'):
+            return str(model or '').strip().lower().startswith(ActionDefinitions.TOOL_CALLING_MODEL_PREFIXES)
+        return False # local services (KoboldCpp, textgenwebui) and custom URLs: depends on the model, so it is left to the user
+
+    @staticmethod
+    def resolve_advanced_actions(setting: str, llm_service: str, model: str) -> bool:
+        if setting == ActionDefinitions.ADVANCED_ACTIONS_ON:
+            return True
+        if setting == ActionDefinitions.ADVANCED_ACTIONS_OFF:
+            return False
+        return ActionDefinitions.is_tool_calling_supported(llm_service, model)
     
     @staticmethod
     def get_disabled_actions_config_value() -> ConfigValue:
@@ -46,24 +77,12 @@ class ActionDefinitions:
                         Some actions can only be triggered when `Advanced Actions` is enabled above.
                         To learn more about an action, see the associated JSON file in the data/actions/ folder."""
         default_disabled = [
+            # need a crime situation to make sense, or move NPCs in ways that can break quests
             "AbsolveCrime",
-            "AddToConversation",
-            "Brawl",
             "CancelTravel",
-            "CastSpell",
-            "CheckDirections",
-            "CollectIngredients",
-            "Emote",
-            "Follow",
-            "LeadTo",
-            "Look",
-            "Loot",
             "ReportCrime",
             "ShareConversation",
             "Teleport",
-            "TravelTo",
-            "Unfollow",
-            "Wait",
         ]
         # Only include defaults that actually exist in the scanned action names
         valid_defaults = [name for name in default_disabled if name in action_names]

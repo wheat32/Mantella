@@ -1,6 +1,7 @@
 import re
 from typing import Any, Hashable
 from src.conversation.action import Action
+from src.conversation.npc_records import NpcRecords
 from src.http.communication_constants import communication_constants
 from src.conversation.conversation_log import conversation_log
 from src.characters_manager import Characters
@@ -263,6 +264,10 @@ class Context:
                 self.__ingame_events.append(f"{name} is now in combat!")
             else:
                 self.__ingame_events.append(f"{name} is no longer in combat.")
+        if not npc.is_player_character:
+            objects_event = self.get_nearby_objects_change_event(npc.name, self.get_nearby_objects(current_stats), self.get_nearby_objects(npc))
+            if objects_event:
+                self.__ingame_events.append(objects_event)
         #update custom  values
         try:
             if (current_stats.get_custom_character_value("mantella_actor_pos_x") is not None and
@@ -410,7 +415,65 @@ class Context:
                                                                                character.get_custom_character_value(communication_constants.KEY_ACTOR_CARRIESNOTHING))
                 if notable_items_description:
                     equipment_descriptions.append(notable_items_description)
+                equipment_descriptions.append(self.get_nearby_objects_description(character.name, self.get_nearby_objects(character)))
+                equipment_descriptions.append(self.get_owned_items_description(character.name, character.get_custom_character_value(communication_constants.KEY_ACTOR_OWNEDITEMS)))
         return " ".join(description for description in equipment_descriptions if description)
+
+    def add_ingame_event(self, event: str) -> None:
+        """Adds an event that the NPCs are told about with the next exchange"""
+        if event:
+            self.__ingame_events.append(event)
+
+    @staticmethod
+    def get_owned_items_description(name: str, items: Any) -> str:
+        """The items lying or hanging around an NPC that belong to them, which the player would steal by taking them (see PermitTaking)"""
+        if not isinstance(items, list):
+            return ''
+        listed = [str(item).strip() for item in items if str(item).strip()]
+        if not listed:
+            return ''
+        return f"Belongs to {name} nearby: {', '.join(listed)}."
+
+    @staticmethod
+    def get_companion_note(player_name: str, npc_name: str, purpose: str, destination: str, location: str) -> str:
+        """Tells an NPC who is traveling with the player why, and that they go back to their own life once that is done"""
+        purpose_text = purpose.strip().rstrip('.') if purpose and purpose.strip() else f'coming along with {player_name}'
+        end = f'once that is done (when they reach {destination})' if destination else 'once that is done'
+        note = (f"\n\n{npc_name} is traveling with {player_name}: {purpose_text}. {npc_name} has a life of their own and only came along for this: "
+                f"{end}, or if {player_name} no longer needs them, {npc_name} says goodbye, stops following and goes back to their own life.")
+        if destination and location and (destination.lower() in location.lower() or location.lower() in destination.lower()):
+            note += f" They have now reached {destination}."
+        return note
+
+    @staticmethod
+    def get_nearby_objects(npc: Character) -> list[str] | None:
+        """The notable objects around an NPC as reported by the game (eg "a burning campfire (3 m)"). None if the game did not look"""
+        if npc.get_custom_character_value(communication_constants.KEY_ACTOR_NEARBYOBJECTSCHECKED) is not True:
+            return None
+        objects = npc.get_custom_character_value(communication_constants.KEY_ACTOR_NEARBYOBJECTS)
+        if not isinstance(objects, list):
+            return []
+        return [str(item).strip() for item in objects if str(item).strip()]
+
+    @staticmethod
+    def get_nearby_objects_description(name: str, objects: list[str] | None) -> str:
+        if not objects:
+            return ''
+        return f"Notable things around {name}: {', '.join(objects)}."
+
+    @staticmethod
+    def get_nearby_objects_change_event(name: str, old_objects: list[str] | None, new_objects: list[str] | None) -> str:
+        """An event telling the NPC that what is around them has changed (eg the campfire went out, or they moved elsewhere).
+        Distances alone changing is not reported"""
+        if old_objects is None or new_objects is None:
+            return ''
+        def kinds(objects: list[str]) -> set[str]:
+            return {re.sub(r'\s*\(\d+ m\)$', '', item) for item in objects}
+        if kinds(old_objects) == kinds(new_objects):
+            return ''
+        if not new_objects:
+            return f"There is nothing of note around {name} anymore."
+        return f"Notable things around {name} now: {', '.join(new_objects)}."
 
     @staticmethod
     def get_notable_items_description(name: str, notable_items: Any, carried_kinds: Any = None, carries_nothing: Any = None) -> str:
@@ -526,9 +589,12 @@ class Context:
         """
         if not relationships or not player_name:
             return ''
-        listing = Context.format_listing([f"to {npc_name}, {player_name} is {trust}" for npc_name, trust in relationships])
-        return (f"\n\nHow they stand with {player_name}: {listing}. This decides how far they trust {player_name}, eg whether they share "
-                f"their belongings or secrets, unless the conversation changes their mind.")
+        # "a stranger" is what the relationship is, not what to call the player: said that way, NPCs took it up as a form of address
+        listing = Context.format_listing([f"to {npc_name}, {player_name} is {f'someone {npc_name} has just met' if trust == 'a stranger' else trust}"
+                                          for npc_name, trust in relationships])
+        return (f"\n\nHow they stand with {player_name}: {listing}. This decides how far they trust {player_name} with their secrets, gold "
+                f"and valuables, unless the conversation changes their mind. Small favors, like sparing something cheap or a fair swap, do not "
+                f"need a friendship, unless they dislike {player_name}.")
 
     @staticmethod
     def get_unknown_player_name_note(player_name: str, npc_names: list[str]) -> str:
@@ -545,7 +611,10 @@ class Context:
         return (f"\n\nNot everyone knows {player_name}'s name. {names} only {verb} if {player_name} has told it (in this conversation, or one "
                 f"{names} remember{'s' if len(npc_names) == 1 else ''}), or if who {names} {'is' if len(npc_names) == 1 else 'are'} and what has happened in the story would have told them: "
                 f"eg a courier sent to find {player_name}, fellow members of a guild {player_name} has joined, or someone who has sought "
-                f"{player_name} out or been watching them. Otherwise {names} {verb} not call {player_name} by name, say it, or claim to have heard it.")
+                f"{player_name} out or been watching them. Otherwise {names} {verb} not call {player_name} by name, say it, or claim to have heard it. "
+                f"Instead they talk to {player_name} without naming them, or use a term of address that suits who is speaking and the moment, going by "
+                f"how {player_name} looks (eg their race, or what they wear or carry): such as friend, traveler, lad or lass, or a word for "
+                f"{player_name}'s people. 'Stranger' is fine now and then, but they vary it rather than using the same word every time.")
 
     # The label of an option of Mantella's own dialogue menu (eg "Goodbye. (Remove from Mantella conversation)"): what the option
     # does in the mod, which is not part of what was said
@@ -675,6 +744,12 @@ class Context:
         if player:
             numbered_names_note += self.get_unknown_player_name_note(player.name, [character.name for character in non_player_chars if not self.knows_player_name(character)])
             numbered_names_note += self.get_relationships_note(player.name, [(character.name, self.__get_trust(character)) for character in non_player_chars])
+            records = NpcRecords(conversation_log.game_path, self.__world_id)
+            for character in non_player_chars:
+                companion = records.get_companion(character.ref_id)
+                if companion:
+                    numbered_names_note += self.get_companion_note(player.name, character.name, str(companion.get('purpose') or ''),
+                                                                   str(companion.get('destination') or ''), self.__location)
 
         def build_prompt(bios_text: str, summaries_text: str) -> str:
             return prompt.format(

@@ -64,7 +64,68 @@ Function RegisterForConversationEvents()
     RegisterForModEvent(EventInterface.EVENT_ACTIONS_PREFIX + mConsts.ACTION_REMOVECHARACTER,"OnRemoveCharacterActionReceived")
     RegisterForModEvent(EventInterface.EVENT_ADD_EVENT,"OnAddEventReceived")
     RegisterForModEvent(EventInterface.EVENT_ACTION_RESPONSE_COMPLETED,"OnActionResponseCompleted")
+    RegisterForModEvent(EventInterface.EVENT_ADVANCED_ACTIONS_PREFIX + mConsts.ACTION_NPC_TELLNAME, "OnTellNameActionReceived")
+    RegisterForModEvent(EventInterface.EVENT_ADVANCED_ACTIONS_PREFIX + mConsts.ACTION_NPC_PERMITTAKING, "OnPermitTakingActionReceived")
+    ; Follow is carried out by MantellaAdvancedAction_Follow. This only notes where the NPC is going with the player
+    RegisterForModEvent(EventInterface.EVENT_ADVANCED_ACTIONS_PREFIX + mConsts.ACTION_NPC_FOLLOW, "OnFollowWithDestinationReceived")
 EndFunction
+
+; An NPC without a name of their own told the player their name: from now on the game shows them by it
+event OnTellNameActionReceived(Form speaker, Form conversationQuest, int argumentsHandle)
+    string newName = SKSE_HTTP.getString(argumentsHandle, "name", "")
+    if newName == ""
+        return
+    endIf
+    string[] sourceNames = SKSE_HTTP.getStringArray(argumentsHandle, mConsts.ACTION_ARG_SOURCE)
+    Actor npc = None
+    if sourceNames.Length > 0
+        npc = GetActorByName(sourceNames[0])
+    endIf
+    if !npc
+        npc = speaker as Actor
+    endIf
+    if npc && npc != PlayerRef && !npc.GetLeveledActorBase().IsUnique()
+        npc.SetDisplayName(newName, true)
+    endIf
+endEvent
+
+; An NPC lets the player take some of their belongings lying or hanging around them
+event OnPermitTakingActionReceived(Form speaker, Form conversationQuest, int argumentsHandle)
+    string[] itemNames = SKSE_HTTP.getStringArray(argumentsHandle, "items")
+    if itemNames.Length == 0
+        return
+    endIf
+    string[] sourceNames = SKSE_HTTP.getStringArray(argumentsHandle, mConsts.ACTION_ARG_SOURCE)
+    Actor owner = None
+    if sourceNames.Length > 0
+        owner = GetActorByName(sourceNames[0])
+    endIf
+    if !owner
+        owner = speaker as Actor
+    endIf
+    if owner
+        int allowed = SKSE_HTTP.AllowTakingOwnedItems(owner, itemNames, repository.objectNoticeDistance)
+        if allowed > 0
+            Debug.Notification(owner.GetDisplayName() + " lets you take some of their things.")
+        endIf
+    endIf
+endEvent
+
+event OnFollowWithDestinationReceived(Form speaker, Form conversationQuest, int argumentsHandle)
+    string destination = SKSE_HTTP.getString(argumentsHandle, "destination", "")
+    if destination == ""
+        return
+    endIf
+    string[] sourceNames = SKSE_HTTP.getStringArray(argumentsHandle, mConsts.ACTION_ARG_SOURCE)
+    int i = 0
+    while i < sourceNames.Length
+        Actor companion = GetActorByName(sourceNames[i])
+        if companion
+            repository.SetCompanionDestination(companion, destination)
+        endIf
+        i += 1
+    endWhile
+endEvent
 
 event OnUpdate()
     If (_repeatingMessage != "")
@@ -1075,9 +1136,24 @@ int function buildActorSetting(Actor actorToBuild)
         ActorBase leveledBase = actorToBuild.GetLeveledActorBase()
         if leveledBase
             SKSE_HTTP.setBool(customActorValuesHandle, mConsts.KEY_ACTOR_ISUNIQUE, leveledBase.IsUnique())
+            ; the game's own name for them, also once they are shown under a name they gave themselves
+            SKSE_HTTP.setString(customActorValuesHandle, mConsts.KEY_ACTOR_BASENAME, leveledBase.GetName())
         endIf
         If (repository.notableItemsEnabled)
             AddNotableItems(customActorValuesHandle, actorToBuild)
+        EndIf
+        If (repository.noticeObjectsEnabled)
+            ; what is around them (a burning campfire, a tent, a forge, ...), so that they know about it
+            string[] nearbyObjects = SKSE_HTTP.GetNearbyObjects(actorToBuild, repository.objectNoticeDistance, 8)
+            SKSE_HTTP.setBool(customActorValuesHandle, mConsts.KEY_ACTOR_NEARBYOBJECTSCHECKED, true)
+            if nearbyObjects.Length > 0
+                SKSE_HTTP.setStringArray(customActorValuesHandle, mConsts.KEY_ACTOR_NEARBYOBJECTS, nearbyObjects)
+            endIf
+            ; what lies or hangs around them that is theirs (taking it would be stealing, unless they allow it)
+            string[] ownedItems = SKSE_HTTP.GetOwnedItemsNearby(actorToBuild, repository.objectNoticeDistance, 8)
+            if ownedItems.Length > 0
+                SKSE_HTTP.setStringArray(customActorValuesHandle, mConsts.KEY_ACTOR_OWNEDITEMS, ownedItems)
+            endIf
         EndIf
     EndIf
     SKSE_HTTP.setNestedDictionary(handle, mConsts.KEY_ACTOR_CUSTOMVALUES, customActorValuesHandle)

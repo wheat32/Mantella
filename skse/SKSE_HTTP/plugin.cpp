@@ -5,6 +5,8 @@
 #include <FrameCapture.h>
 #include <DialogueOptions.h>
 #include <NotableItems.h>
+#include <NearbyObjects.h>
+#include <OwnedItems.h>
 #include <nlohmann/json.hpp>
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/msvc_sink.h>
@@ -783,6 +785,9 @@ bool Bind(RE::BSScript::IVirtualMachine* vm)
     vm->RegisterFunction("DumpDialogueOptions", className, DialogueOptions::Dump);
     vm->RegisterFunction("GetNotableItems", className, NotableItems::Get);
     vm->RegisterFunction("GetCarriedItemKinds", className, NotableItems::GetKinds);
+    vm->RegisterFunction("GetNearbyObjects", className, NearbyObjects::Get);
+    vm->RegisterFunction("GetOwnedItemsNearby", className, OwnedItems::Get);
+    vm->RegisterFunction("AllowTakingOwnedItems", className, OwnedItems::AllowTaking);
     vm->RegisterFunction("GetRaceDefaultVoiceType", className, GetRaceDefaultVoiceType);
     vm->RegisterFunction("SetRaceDefaultVoiceType", className, SetRaceDefaultVoiceType);
     vm->RegisterFunction("StopVoiceLine", className, StopVoiceLine);

@@ -1,0 +1,36 @@
+{
+    "identifier": "mantella_npc_permittaking",
+    "name": "PermitTaking",
+    "description": "Let the player take some of your belongings that are lying or hanging around you (listed as 'Belongs to ... nearby'), so that taking them is not stealing. Only when the player asks for them and you are willing: many people will spare something small for someone who asks politely or explains their need, but parting with valuables takes real trust, and someone rude, suspicious or proud may refuse.",
+    "key": "PermitTaking",
+    "parameters": {
+        "source": {
+            "type": "array",
+            "description": "The NPC whose belongings these are.",
+            "items": {
+                "type": "string"
+            },
+            "scope": "conversation"
+        },
+        "items": {
+            "type": "array",
+            "description": "The belongings the player may take, named exactly as listed, without the count (eg 'Salmon Meat').",
+            "items": {
+                "type": "string"
+            }
+        }
+    },
+    "required": [
+        "source",
+        "items"
+    ],
+    "allowed_games": [
+        "skyrim"
+    ],
+    "requires_response": false,
+    "is-interrupting": false,
+    "allow_repeat": false,
+    "one-on-one": true,
+    "multi-npc": true,
+    "radiant": false
+}

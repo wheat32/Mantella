@@ -1,3 +1,4 @@
+from src.config.definitions.action_definitions import ActionDefinitions
 import configparser
 import os
 import sys
@@ -331,6 +332,7 @@ LLM parameter list must be valid JSON""")
 
             #UI
             self.auto_launch_ui = self.__definitions.get_bool_value("auto_launch_ui")
+            self.check_for_updates = self.__definitions.get_bool_value("check_for_updates")
 
             self.play_startup_sound = self.__definitions.get_bool_value("play_startup_sound")
 
@@ -405,7 +407,9 @@ LLM parameter list must be valid JSON""")
             self.telemetry_protocol = self.__definitions.get_string_value("telemetry_protocol")
             
             # Actions
-            self.advanced_actions_enabled = self.__definitions.get_bool_value("advanced_actions_enabled")
+            # "Automatic": on for LLMs known to support tool calling
+            self.advanced_actions = self.__definitions.get_string_value("advanced_actions")
+            self.advanced_actions_enabled = ActionDefinitions.resolve_advanced_actions(self.advanced_actions, self.llm_api, self.llm)
             self.disabled_actions: list[str] = self.__definitions.get_string_list_value("disabled_actions")
             self.custom_function_model = self.__definitions.get_bool_value("custom_function_model")
             self.function_llm_api = self.__definitions.get_string_value("function_llm_api")

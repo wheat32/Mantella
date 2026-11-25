@@ -522,7 +522,31 @@ Event OnHit(ObjectReference akAggressor, Form akSource, Projectile akProjectile,
 EndEvent
 
 
+; A companion has reached the place they were going with the player: they come over to part ways
+Function OnCompanionArrived(Actor companion, string locationName)
+    string arrival = companion.GetDisplayName() + " has reached " + locationName + " with " + getPlayerName(False) + ", where they were going together."
+    if conversation.IsRunning()
+        if conversation.IsActorInConversation(companion)
+            AddIngameEventToConversation(arrival)
+        endIf
+        return
+    endIf
+    Actor[] actors = new Actor[2]
+    actors[0] = PlayerRef
+    actors[1] = companion
+    conversation.Start()
+    conversation.AddIngameEvent(arrival + " They come over to say goodbye.")
+    conversation.StartConversation(actors)
+    conversation.TriggerApproachMoveAction(companion)
+EndFunction
+
 Event OnLocationChange(Location akOldLoc, Location akNewLoc)
+    if akNewLoc
+        Actor arrivedCompanion = repository.TakeArrivedCompanion(akNewLoc.GetName())
+        if arrivedCompanion
+            OnCompanionArrived(arrivedCompanion, akNewLoc.GetName())
+        endIf
+    endIf
     ; check if radiant dialogue is playing, and end conversation if the player leaves the area
     If (conversation.IsRunning() && !conversation.IsPlayerInConversation())
         conversation.EndConversation()
