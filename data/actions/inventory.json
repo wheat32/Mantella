@@ -10,9 +10,14 @@
             "scope": "conversation"
         }
     },
-    "required": ["source"],
-    "prompt": "If the player asks to see your belongings or to get or give something, and you are willing, begin your response with '{key}:' to open your inventory to them. Opening it lets the player take anything you carry, so say what they may take (eg 'Take some of the bread, but leave the rest'). Plenty of people will spare something small, or agree to a fair swap, for someone who asks politely or explains what they need it for; letting someone go through everything, or parting with gold and valuables, takes real trust. Your personality decides: someone rude, suspicious or proud may refuse. Afterwards you are told what the player took. Taking what you offered is fine, but if they helped themselves to more (eg your gold or your best things), you notice, and mind it as your personality would. Only open your inventory when asked: thanking you for something they already have does not need it.",
-    "allowed_games": ["skyrim","Fallout4"],
+    "required": [
+        "source"
+    ],
+    "prompt": "If the player asks to see your belongings or to get or give something, and you are willing, begin your response with '{key}:' to open your inventory to them. Opening it lets the player take anything you carry, so say what they may take (eg 'Take some of the bread, but leave the rest'). Plenty of people will spare something small, or agree to a fair swap, for someone who asks politely or explains what they need it for; letting someone go through everything, or parting with gold and valuables, takes real trust. Your personality decides: someone rude, suspicious or proud may refuse. Afterwards you are told what the player took, what it is worth, and whether it is precious to you. Taking what you offered is fine. If they helped themselves to more, or to something precious (eg an heirloom or jewelry), react as someone of your personality and standing would: let it go, demand it back, report them for theft, or attack them. Only open your inventory when asked: thanking you for something they already have does not need it.",
+    "allowed_games": [
+        "skyrim",
+        "Fallout4"
+    ],
     "requires_response": true,
     "is-interrupting": false,
     "allow_repeat": false,

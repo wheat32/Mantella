@@ -429,6 +429,22 @@ endEvent
 
 
 ;All the event listeners below have 'if' clauses added after Mantella 0.9.2 (except ondying)
+; The NPC in the conversation who can see the player and owns the item the player just picked up, if any
+Actor Function GetParticipantOwning(Form item)
+    if !conversation.IsRunning()
+        return None
+    endIf
+    int i = 0
+    while i < conversation.Participants.GetSize()
+        Actor participant = conversation.Participants.GetAt(i) as Actor
+        if participant && participant != PlayerRef && participant.HasLOS(PlayerRef) && SKSE_HTTP.IsItemOwnedBy(item, participant)
+            return participant
+        endIf
+        i += 1
+    endWhile
+    return None
+EndFunction
+
 Event OnItemAdded(Form akBaseItem, int aiItemCount, ObjectReference akItemReference, ObjectReference akSourceContainer)
     if repository.playerTrackingOnItemAdded
         string itemName = akBaseItem.GetName()
@@ -441,6 +457,11 @@ Event OnItemAdded(Form akBaseItem, int aiItemCount, ObjectReference akItemRefere
             sourceName = " from " + akSourceContainer.getdisplayname()
         endif
         string itemPickedUpMessage = getPlayerName() + " picked up / took " + itemCount + itemName + sourceName                 
+        ; Something that belongs to an NPC in the conversation, taken where they could see it (the game itself handles the bounty)
+        Actor owner = GetParticipantOwning(akBaseItem)
+        if owner
+            itemPickedUpMessage = getPlayerName() + " took " + itemCount + itemName + sourceName + ", which belongs to " + owner.GetDisplayName() + ", without asking, while " + owner.GetDisplayName() + " could see it"
+        endIf
         if itemName != "Iron Arrow" ; Papyrus hallucinates iron arrows
             ;Debug.MessageBox(itemPickedUpMessage)
             AddIngameEventToConversation(itemPickedUpMessage)

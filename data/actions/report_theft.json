@@ -1,0 +1,28 @@
+{
+    "identifier": "mantella_npc_reporttheft",
+    "name": "ReportTheft",
+    "description": "Report the player for stealing from you: for taking much more than you allowed from your inventory, or something precious. This gives them a bounty in the hold, as for any theft that was seen, even without a guard around (it is gone if you die before it is reported). Only if someone of your personality and standing would: some let it go or only demand it back, others call it theft, and a dangerous or hot-headed person may attack instead.",
+    "key": "ReportTheft",
+    "parameters": {
+        "source": {
+            "type": "array",
+            "description": "The NPC who was stolen from.",
+            "items": {
+                "type": "string"
+            },
+            "scope": "conversation"
+        }
+    },
+    "required": [
+        "source"
+    ],
+    "allowed_games": [
+        "skyrim"
+    ],
+    "requires_response": false,
+    "is-interrupting": false,
+    "allow_repeat": false,
+    "one-on-one": true,
+    "multi-npc": true,
+    "radiant": false
+}

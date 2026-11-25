@@ -1,6 +1,7 @@
 #include "RE/Skyrim.h"
 #include "SKSE/SKSE.h"
 #include <NotableItems.h>
+#include <Theft.h>
 #include <algorithm>
 #include <optional>
 
@@ -246,6 +247,11 @@ std::vector<std::string> Get(RE::StaticFunctionTag*, RE::Actor* carrier, std::in
                 continue;
             }
             notable.text = GetItemText(name, count, description);
+            std::string preciousReason = Theft::GetPreciousReason(item, entry.get(), item->GetGoldValue());
+            if (preciousReason.empty() == false)
+            {
+                notable.text += " (precious: " + preciousReason + ")";
+            }
             items.push_back(std::move(notable));
         }
 

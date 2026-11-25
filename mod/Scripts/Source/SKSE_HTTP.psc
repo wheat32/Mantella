@@ -77,6 +77,15 @@ String[] Function GetOwnedItemsNearby(Actor owner, Float maxDistanceMeters, Int 
 ; Makes the player the owner of the actor's items within the distance whose names are listed, so that taking them is not stealing.
 ; Returns how many items the player may now take
 Int Function AllowTakingOwnedItems(Actor owner, String[] itemNames, Float maxDistanceMeters) global native
+; Notes what the actor carries, before their inventory is opened to the player (see GetTakenItems)
+Function RememberInventory(Actor owner) global native
+; What the player took from the actor since RememberInventory, eg "a Silver Ring (worth 60, precious: jewelry)"
+String[] Function GetTakenItems(Actor owner) global native
+; Reports what the player last took from the actor as theft, as the game does when it sees the player steal (the actor is the witness).
+; Returns the value reported
+Int Function ReportTheft(Actor owner) global native
+; Whether an item the player carries belongs to the actor (or a faction they are in)
+Bool Function IsItemOwnedBy(Form item, Actor owner) global native
 VoiceType Function GetVoiceType(Actor actor) global native
 Function SetVoiceType(Actor actor, VoiceType voice) global native
 VoiceType Function GetRaceDefaultVoiceType(Actor actor) global native

@@ -782,3 +782,14 @@ def test_belongings_and_companions_in_the_prompt():
     assert Conversation.match_owned_items(['salmon'], owned) == ['Salmon Meat']
     assert Conversation.match_owned_items(['Salmon Meat (2)', 'Fishing Rod'], owned) == ['Salmon Meat', 'Fishing Rod']
     assert Conversation.match_owned_items(['Iron Sword'], owned) == [] # only what belongs to the NPC
+
+
+def test_theft_actions_are_available():
+    """ReportTheft is an action of its own, and ReportCrime is no longer disabled by default"""
+    from src.actions.function_manager import FunctionManager
+    from src.config.definitions.action_definitions import ActionDefinitions
+    FunctionManager.load_all_actions([])
+    names = [action.get('name') for action in FunctionManager._actions.values()]
+    assert 'ReportTheft' in names and 'TellName' in names and 'PermitTaking' in names
+    defaults = ActionDefinitions.get_disabled_actions_config_value().default_value
+    assert 'ReportCrime' not in defaults and 'Follow' not in defaults and 'AbsolveCrime' in defaults
