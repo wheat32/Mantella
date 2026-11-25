@@ -13,6 +13,7 @@ class communication_constants:
     KEY_REPLYTTYPE_INITCOMPLETED: str = PREFIX + "init_completed"
     KEY_PTT_ENABLED: str = PREFIX + "ptt_enabled"
     KEY_PTT_KEYCODE: str = PREFIX + "ptt_key_code"
+    KEY_PLAYSESSION: str = PREFIX + "play_session"
     KEY_REPLYTTYPE_STARTCONVERSATIONCOMPLETED: str = PREFIX + "start_conversation_completed"
 
     KEY_REQUEST_EXTRA_ACTIONS: str = PREFIX + "extra_actions"
@@ -28,6 +29,8 @@ class communication_constants:
     KEY_STARTCONVERSATION_USENARRATOR: str = PREFIX + "use_narrator"
     KEY_STARTCONVERSATION_PLAYERSPEAKSFIRST: str = PREFIX + "player_speaks_first"
     KEY_ENDCONVERSATION_TIMESTAMP: str = PREFIX + "end_timestamp"
+    KEY_ENDCONVERSATION_REASON: str = PREFIX + "end_reason"
+    ENDCONVERSATION_REASON_PLAYERLEFT: str = "player_left"
     KEY_CONTINUECONVERSATION_TOPICINFOFILE: str = PREFIX + "topicinfofile"
     KEY_INPUTTYPE: str = PREFIX + "input_type"
     KEY_INPUTTYPE_MIC: str = PREFIX + "mic_input"
@@ -54,6 +57,7 @@ class communication_constants:
     KEY_ACTOR_NOTABLEITEMS: str = PREFIX + "actor_notable_items"
     KEY_ACTOR_CARRIEDKINDS: str = PREFIX + "actor_carried_kinds"
     KEY_ACTOR_CARRIESNOTHING: str = PREFIX + "actor_carries_nothing"
+    KEY_ACTOR_ISUNIQUE: str = PREFIX + "actor_is_unique"
     KEY_ACTOR_EQUIPMENT: str = PREFIX + "equipment"
 
     KEY_ACTOR_SPEAKER: str = PREFIX + "actor_speaker"

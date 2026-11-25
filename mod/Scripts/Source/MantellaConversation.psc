@@ -43,6 +43,7 @@ string lineToSpeakError = "Error: No line transmitted for actor to speak"
 bool microphoneEnabledLastKnownStatus = false
 Actor[] _cachedNearbyActors = None
 bool _awaitingPushToTalk = false
+string _endReason = "" ; why the conversation is about to end, if it is not the usual way (see SetEndReason)
 bool _waitingForActionResponse = true
 int _actionResponseTimeout = 0
 bool _playerInputPending = false
@@ -113,6 +114,7 @@ function StartConversation(Actor[] actorsToStartConversationWith)
     
     SKSE_HTTP.setString(handle, mConsts.KEY_REQUESTTYPE, mConsts.KEY_REQUESTTYPE_STARTCONVERSATION)
     SKSE_HTTP.setString(handle, mConsts.KEY_STARTCONVERSATION_WORLDID, PlayerRef.GetDisplayName() + repository.worldID)
+    SKSE_HTTP.setInt(handle, mConsts.KEY_PLAYSESSION, repository.playSessionId)
     if TakePlayerSpeaksFirstRequest()
         ; Free-flow: the player is already talking, so the NPC does not open with a greeting
         SKSE_HTTP.setBool(handle, "mantella_player_speaks_first", true)
@@ -497,10 +499,20 @@ event OnEndConversationActionReceived(Form speaker)
     EndConversation()
 endEvent
 
+; Tells Mantella why the conversation ends, if it ends next (eg mConsts.ENDCONVERSATION_REASON_PLAYERLEFT). "" for none
+Function SetEndReason(string reason)
+    _endReason = reason
+EndFunction
+
 Function EndConversation()
     _hasBeenStopped = true
     int handle = SKSE_HTTP.createDictionary()
     SKSE_HTTP.setString(handle, mConsts.KEY_REQUESTTYPE,mConsts.KEY_REQUESTTYPE_ENDCONVERSATION)
+    if _endReason != ""
+        SKSE_HTTP.setString(handle, mConsts.KEY_ENDCONVERSATION_REASON, _endReason)
+        _endReason = ""
+    endIf
+    SKSE_HTTP.setInt(handle, mConsts.KEY_PLAYSESSION, repository.playSessionId)
     SKSE_HTTP.setFloat(handle, mConsts.KEY_ENDCONVERSATION_TIMESTAMP, GameDaysPassed.GetValue() + 1) ; +1 because days start at 0
     SKSE_HTTP.sendLocalhostHttpRequest(handle, repository.HttpPort, mConsts.HTTP_ROUTE_MAIN)
 EndFunction
@@ -1058,8 +1070,15 @@ int function buildActorSetting(Actor actorToBuild)
     int customActorValuesHandle = SKSE_HTTP.createDictionary()
     If (isPlayerCharacter)
         AddCustomPCValues(customActorValuesHandle, actorToBuild)
-    ElseIf (repository.notableItemsEnabled)
-        AddNotableItems(customActorValuesHandle, actorToBuild)
+    Else
+        ; NPCs that are not unique ("Fisherman", "bandit") have no name of their own
+        ActorBase leveledBase = actorToBuild.GetLeveledActorBase()
+        if leveledBase
+            SKSE_HTTP.setBool(customActorValuesHandle, mConsts.KEY_ACTOR_ISUNIQUE, leveledBase.IsUnique())
+        endIf
+        If (repository.notableItemsEnabled)
+            AddNotableItems(customActorValuesHandle, actorToBuild)
+        EndIf
     EndIf
     SKSE_HTTP.setNestedDictionary(handle, mConsts.KEY_ACTOR_CUSTOMVALUES, customActorValuesHandle)
     return handle

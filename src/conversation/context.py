@@ -1,3 +1,4 @@
+import re
 from typing import Any, Hashable
 from src.conversation.action import Action
 from src.http.communication_constants import communication_constants
@@ -247,7 +248,7 @@ class Context:
             self.__prev_nearby_npc_names = []
 
         if custom_ingame_events:
-            self.__ingame_events.extend(custom_ingame_events)
+            self.__ingame_events.extend(self.clean_ingame_events(custom_ingame_events))
 
         if config_settings:
             self.__config_settings = config_settings
@@ -546,6 +547,43 @@ class Context:
                 f"eg a courier sent to find {player_name}, fellow members of a guild {player_name} has joined, or someone who has sought "
                 f"{player_name} out or been watching them. Otherwise {names} {verb} not call {player_name} by name, say it, or claim to have heard it.")
 
+    # The label of an option of Mantella's own dialogue menu (eg "Goodbye. (Remove from Mantella conversation)"): what the option
+    # does in the mod, which is not part of what was said
+    MANTELLA_DIALOGUE_OPTION = re.compile(r'\s*\([^()]*\bMantella\b[^()]*\)', re.IGNORECASE)
+
+    @staticmethod
+    def clean_ingame_events(events: list[str]) -> list[str]:
+        """Leaves out events that only repeat another one (the game can report a line of vanilla dialogue twice), and the labels
+        of Mantella's own dialogue options from lines of dialogue (keeping what was said: "Nick: Goodbye.; Fisherman: Goodbye")"""
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for event in events:
+            if not isinstance(event, str):
+                continue
+            event = Context.MANTELLA_DIALOGUE_OPTION.sub('', event)
+            normalized = ' '.join(event.split()).replace('; ', ';').lower()
+            if not normalized.strip(' .;:') or normalized in seen:
+                continue
+            seen.add(normalized)
+            cleaned.append(event)
+        return cleaned
+
+    @staticmethod
+    def get_role_names_note(role_names: list[str]) -> str:
+        """Characters without a name of their own are known by what they are ("Fisherman", "bandit"). This is not their name:
+        asked for it, they give a fitting personal name, which their memories then keep
+
+        Returns:
+            str: a paragraph to add to the system prompt, empty if every NPC has a name of their own
+        """
+        if not role_names:
+            return ''
+        names = Context.format_listing(role_names)
+        verb = 'is' if len(role_names) == 1 else 'are'
+        return (f"\n\n{names} {verb} only what people call someone like them, not a personal name. Each of them has a name of their own, "
+                f"fitting their race and background: if asked, they give it (and keep it from then on, as their memories record it) or keep it to "
+                f"themselves, but never introduce themselves as {names}.")
+
     @staticmethod
     def get_numbered_names_note(names: list[str]) -> str:
         """The game tells characters that share a name apart by a number ("bandit", "bandit 2"). Such a name is a label and not
@@ -631,6 +669,9 @@ class Context:
         logger.log(23, f'Maximum size of prompt is {self.__client.token_limit} x {self.TOKEN_LIMIT_PERCENT} = {max_prompt_tokens} tokens.')
 
         numbered_names_note = self.get_numbered_names_note([character.name for character in non_player_chars])
+        # the game reports whether an NPC is unique (has a name of their own). Older versions of the mod do not, which leaves this out
+        numbered_names_note += self.get_role_names_note([utils.get_name_without_number(character.name) for character in non_player_chars
+                                                         if character.get_custom_character_value(communication_constants.KEY_ACTOR_ISUNIQUE) is False])
         if player:
             numbered_names_note += self.get_unknown_player_name_note(player.name, [character.name for character in non_player_chars if not self.knows_player_name(character)])
             numbered_names_note += self.get_relationships_note(player.name, [(character.name, self.__get_trust(character)) for character in non_player_chars])

@@ -3,8 +3,11 @@
 This module must stay free of heavy imports: `apply_wine_workarounds` has to run before
 libraries such as onnxruntime, ctranslate2 (faster_whisper) and huggingface_hub are imported.
 """
+import logging
 import os
 import platform
+import re
+from typing import Callable
 from functools import lru_cache
 
 
@@ -136,3 +139,69 @@ def _free_wine_string(kernel32, pointer) -> None:
         kernel32.HeapFree(kernel32.GetProcessHeap(), 0, pointer)
     except Exception:
         pass
+
+
+# A drive letter that starts a path (eg "Z:\\mnt" or "C:/users"), not part of a word or a URL ("http://")
+_WINDOWS_PATH_START = re.compile(r'(?<![A-Za-z0-9])([A-Za-z]):[\\/]')
+# Where a path in a message ends: line breaks and quotes. Paths may contain spaces, so a space does not end them
+_WINDOWS_PATH_END = re.compile(r'[\r\n"\'`]')
+_drive_roots: dict[str, str | None] = {}
+
+
+def _get_drive_root(drive_letter: str) -> str | None:
+    """Where a Wine drive is on the host (eg 'Z' -> '/', 'C' -> '/home/user/.wine/drive_c'). None if it is not a Wine drive"""
+    letter = drive_letter.upper()
+    if letter not in _drive_roots:
+        root = None
+        try:
+            import ctypes
+            root = _get_unix_file_name(ctypes.windll.kernel32, letter + ':\\')
+        except Exception:
+            root = None
+        _drive_roots[letter] = root
+    return _drive_roots[letter]
+
+
+def convert_windows_paths_in_text(text: str, get_drive_root: Callable[[str], str | None] | None = None) -> str:
+    """Rewrites the Windows paths in a text (eg a log message) as paths of the host when running under Wine:
+    'Z:\\mnt\\games\\Skyrim' -> '/mnt/games/Skyrim'. Text without a drive letter, and drives Wine does not know, are left as they are
+
+    Args:
+        text: The text to rewrite
+        get_drive_root: Returns where a drive is on the host. Defaults to asking Wine
+    """
+    if not text or ':' not in text:
+        return text
+    get_drive_root = get_drive_root or _get_drive_root
+    result: list[str] = []
+    position = 0
+    for match in _WINDOWS_PATH_START.finditer(text):
+        if match.start() < position:
+            continue
+        root = get_drive_root(match.group(1))
+        if not root:
+            continue
+        end_match = _WINDOWS_PATH_END.search(text, match.end())
+        end = end_match.start() if end_match else len(text)
+        path_on_drive = text[match.end():end].replace('\\', '/')
+        result.append(text[position:match.start()])
+        result.append(root.rstrip('/') + '/' + path_on_drive)
+        position = end
+    if not result:
+        return text
+    result.append(text[position:])
+    return ''.join(result)
+
+
+class HostPathLogFilter(logging.Filter):
+    """Shows the paths in log messages as paths of the host when running under Wine (see convert_windows_paths_in_text)"""
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            message = record.getMessage()
+            converted = convert_windows_paths_in_text(message)
+            if converted != message:
+                record.msg = converted
+                record.args = ()
+        except Exception:
+            pass # a message is always logged, even if its paths could not be converted
+        return True

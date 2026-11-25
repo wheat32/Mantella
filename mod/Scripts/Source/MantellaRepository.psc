@@ -36,6 +36,14 @@ bool property pushToTalkEnabled auto
 ; When the free-flow talk key last started a conversation (real time in seconds). Kept here rather than on the conversation quest,
 ; whose script variables are reset when the quest is started
 float property playerSpeaksFirstRequestTime auto
+; A new random number each time a save is loaded (or a new game is started). Sent with every conversation, so that Mantella can tell
+; that a save was loaded during a conversation: that conversation belongs to the game that was left, and is not remembered
+int property playSessionId auto
+float property conversationLeaveDistance auto ; meters, 0 = NPCs never leave because of distance
+
+Function StartNewPlaySession()
+    playSessionId = Utility.RandomInt(1, 2147483646)
+EndFunction
 bool property freeFlowUseNearest auto
 bool property freeFlowEnabled auto
 bool property showScreenshotMessages auto
@@ -141,6 +149,9 @@ endEvent
 ; and add the corresponding default value here in a block corresponding to the version number like the examples below
 ; Doing it like this will only assign the defaul values to settings that haven't been initialized prior.
 function assignDefaultSettings(int lastVersion, bool isFirstInit = false)
+    If (lastVersion < 11 || isFirstInit)
+        conversationLeaveDistance = 20
+    EndIf
     If (lastVersion < 10 || isFirstInit)
         showNpcConversationMessages = false
         notableItemsEnabled = true
@@ -269,6 +280,7 @@ function BindStartAddHotkey(int keyCode)
     UnregisterForKey(MantellaStartHotkey)
     MantellaStartHotkey=keyCode
     RegisterForKey(keyCode)
+    RegisterAllHotkeys()
 endfunction
 
 function BindPromptHotkey(int keyCode)
@@ -276,6 +288,7 @@ function BindPromptHotkey(int keyCode)
     UnregisterForKey(MantellaListenerTextHotkey)
     MantellaListenerTextHotkey=keyCode
     RegisterForKey(keyCode)
+    RegisterAllHotkeys()
 endfunction
 
 function BindEndHotkey(int keyCode)
@@ -283,6 +296,7 @@ function BindEndHotkey(int keyCode)
     UnregisterForKey(MantellaEndHotkey)
     MantellaEndHotkey=keyCode
     RegisterForKey(keyCode)
+    RegisterAllHotkeys()
 endfunction
 
 function BindToggleHotkey(int keyCode)
@@ -290,6 +304,7 @@ function BindToggleHotkey(int keyCode)
     UnregisterForKey(MantellaToggleHotkey)
     MantellaToggleHotkey=keyCode
     RegisterForKey(keyCode)
+    RegisterAllHotkeys()
 endfunction
 
 function BindEndConversationHotkey(int keyCode)
@@ -297,7 +312,30 @@ function BindEndConversationHotkey(int keyCode)
     UnregisterForKey(MantellaEndConversationHotkey)
     MantellaEndConversationHotkey=keyCode
     RegisterForKey(keyCode)
+    RegisterAllHotkeys()
 endfunction
+
+; Registers every key that is bound to one of the mod's controls. A key that is unregistered because one control no longer uses it
+; would otherwise also stop working for another control that shares it
+Function RegisterAllHotkeys()
+    int[] keys = new int[9]
+    keys[0] = MantellaStartHotkey
+    keys[1] = MantellaListenerTextHotkey
+    keys[2] = MantellaEndHotkey
+    keys[3] = MantellaToggleHotkey
+    keys[4] = MantellaEndConversationHotkey
+    keys[5] = MantellaCustomGameEventHotkey
+    keys[6] = MantellaRadiantHotkey
+    keys[7] = MantellaPushToTalkHotkey
+    keys[8] = -1
+    int i = 0
+    while i < keys.Length
+        if keys[i] > 0
+            RegisterForKey(keys[i])
+        endIf
+        i += 1
+    endWhile
+EndFunction
 
 ; Whether the key is (also) bound to one of the other controls of the mod, which then has to keep receiving it
 bool function IsOtherHotkey(int keyCode)
@@ -345,6 +383,7 @@ function BindCustomGameEventHotkey(int keyCode)
     UnregisterForKey(MantellaCustomGameEventHotkey)
     MantellaCustomGameEventHotkey=keyCode
     RegisterForKey(keyCode)
+    RegisterAllHotkeys()
 endfunction
 
 function BindRadiantHotkey(int keyCode)
@@ -352,6 +391,7 @@ function BindRadiantHotkey(int keyCode)
     UnregisterForKey(MantellaRadiantHotkey)
     MantellaRadiantHotkey=keyCode
     RegisterForKey(keyCode)
+    RegisterAllHotkeys()
 endfunction
 
 bool Function IsVR()

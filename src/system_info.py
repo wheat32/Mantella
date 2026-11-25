@@ -92,7 +92,9 @@ def _get_wine_details() -> tuple[str | None, str | None, str | None]:
 
 def _get_host_distribution() -> str | None:
     """The Linux distribution Wine runs on, read through the drive Wine maps to the root of the host's file system"""
-    for path in ('Z:\\etc\\os-release', 'Z:\\usr\\lib\\os-release'):
+    # Proton runs games in the Steam Runtime container, whose own /etc/os-release names the runtime ("Steam Runtime 4").
+    # The container shows the host's files under /run/host
+    for path in ('Z:\\run\\host\\etc\\os-release', 'Z:\\run\\host\\usr\\lib\\os-release', 'Z:\\etc\\os-release', 'Z:\\usr\\lib\\os-release'):
         try:
             with open(path, 'r', encoding='utf-8', errors='replace') as f:
                 name = parse_os_release(f.read())
@@ -103,19 +105,36 @@ def _get_host_distribution() -> str | None:
     return None
 
 
+def _to_wine_path(host_path: str) -> str:
+    return 'Z:' + host_path.replace('/', '\\')
+
+
 def _get_proton_version() -> str | None:
-    """The version of Proton, from the 'version' file in its folder (eg '1731000000 GE-Proton10-4' -> 'GE-Proton10-4')"""
-    for folder in os.environ.get('STEAM_COMPAT_TOOL_PATHS', '').split(':'):
-        if not folder:
-            continue
-        try:
-            with open('Z:' + folder.replace('/', '\\') + '\\version', 'r', encoding='utf-8', errors='replace') as f:
-                content = f.read().split()
-            if content:
-                return content[-1]
-        except OSError:
-            continue
-    return None
+    """The version of Proton: 'Proton 11.0 (11.0-100)', from the files Proton keeps in the game's prefix (compatdata/<app id>)"""
+    compat_data = os.environ.get('STEAM_COMPAT_DATA_PATH', '')
+    if not compat_data:
+        return None
+    version = None
+    try:
+        with open(_to_wine_path(compat_data.rstrip('/') + '/version'), 'r', encoding='utf-8', errors='replace') as f:
+            version = f.read().strip().split()[-1] or None
+    except (OSError, IndexError):
+        pass
+    name = None
+    try:
+        # config_info names the Proton folder in use (eg '.../common/Proton 11.0/files/share/fonts/')
+        with open(_to_wine_path(compat_data.rstrip('/') + '/config_info'), 'r', encoding='utf-8', errors='replace') as f:
+            for line in f.read().splitlines():
+                match = re.search(r'/([^/]*Proton[^/]*)/files/', line)
+                if match:
+                    name = match.group(1)
+                    break
+    except OSError:
+        pass
+    if name and version:
+        return f'{name} ({version})'
+    return name or version
+
 
 
 def get_operating_system() -> list[tuple[str, str]]:
@@ -130,7 +149,7 @@ def get_operating_system() -> list[tuple[str, str]]:
         is_proton = proton_version is not None or 'STEAM_COMPAT_DATA_PATH' in os.environ
         wine_description = f'Wine {wine_version or UNKNOWN}'
         if proton_version:
-            wine_description += f' (Proton {proton_version})'
+            wine_description += f' ({proton_version})' if 'proton' in proton_version.lower() else f' (Proton {proton_version})'
         elif is_proton:
             wine_description += ' (Proton)'
         lines.append(('Compatibility layer', wine_description))

@@ -2,14 +2,17 @@
     "identifier": "mantella_end_conversation",
     "name": "EndConversation",
     "description": "End the current conversation.",
-    "note": "By default, this action is only enabled for radiant conversations. See the 'one-on-one', 'multi-npc', and 'radiant' toggles below.",
+    "note": "Enabled for all conversations: the NPC ends the conversation when the player says goodbye or leaves.",
     "key": "EndConversation",
-    "prompt": "When the conversation naturally concludes, begin your response with '{key}:'",
-    "allowed_games": ["skyrim", "fallout4"],
+    "prompt": "When the player says goodbye or makes clear that they are leaving (eg 'I'll come back later'), or the conversation has otherwise come to an end, begin your response with '{key}:' and say a short farewell.",
+    "allowed_games": [
+        "skyrim",
+        "fallout4"
+    ],
     "requires_response": false,
     "is-interrupting": false,
     "allow_repeat": false,
-    "one-on-one": false,
-    "multi-npc": false,
+    "one-on-one": true,
+    "multi-npc": true,
     "radiant": true
 }

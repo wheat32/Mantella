@@ -597,3 +597,70 @@ def test_actions_at_the_end_of_a_response(example_skyrim_npc_character):
     accumulator.get_next_sentence()
     assert 'Inventory:' in accumulator.take_remaining_text()
     assert accumulator.take_remaining_text() == ''
+
+
+def test_conversation_from_a_game_that_was_left_is_not_remembered(default_conversation, monkeypatch):
+    """Loading a save during a conversation: the conversation belongs to the game that was left, and is not added to memories"""
+    from src.game_manager import GameStateManager
+    other = GameStateManager.is_from_another_play_session
+    assert other(1234, 5678)
+    assert not other(1234, 1234)
+    assert not other(None, 5678) # older versions of the mod send no number
+    assert not other(1234, None)
+    assert not other(True, 5)
+
+    saved = []
+    monkeypatch.setattr(default_conversation, '_Conversation__save_conversation', lambda **kwargs: saved.append(kwargs))
+    default_conversation.end(remember=False)
+    assert saved == []
+    default_conversation.end()
+    assert len(saved) == 1
+
+
+def test_proton_details_are_read_from_the_prefix(tmp_path, monkeypatch):
+    import src.system_info as system_info
+    (tmp_path / 'version').write_text('11.0-100\n')
+    (tmp_path / 'config_info').write_text('11.0-100\n/mnt/games/SteamLibrary/steamapps/common/Proton 11.0/files/share/fonts/\n')
+    monkeypatch.setenv('STEAM_COMPAT_DATA_PATH', str(tmp_path))
+    monkeypatch.setattr(system_info, '_to_wine_path', lambda host_path: host_path) # read directly, as this test does not run under Wine
+    assert system_info._get_proton_version() == 'Proton 11.0 (11.0-100)'
+    monkeypatch.delenv('STEAM_COMPAT_DATA_PATH')
+    assert system_info._get_proton_version() is None
+
+
+def test_role_names_and_event_cleanup():
+    from src.conversation.context import Context
+    note = Context.get_role_names_note(['Fisherman'])
+    assert 'Fisherman is only what people call someone like them' in note and 'never introduce themselves as Fisherman' in note
+    assert Context.get_role_names_note([]) == ''
+
+    events = Context.clean_ingame_events([
+        'Nick: Hello; Vigilant of Stendarr: You speak to a Vigilant of Stendarr.',
+        'Nick: Hello;\n Vigilant of Stendarr: You speak to a Vigilant of Stendarr.', # the same line, reported again
+        'Nick: Goodbye. (Remove from Mantella conversation); Fisherman: Goodbye', # an option of Mantella's own dialogue menu
+        'Nick picked up / took Blue Dartwing',
+    ])
+    assert events == ['Nick: Hello; Vigilant of Stendarr: You speak to a Vigilant of Stendarr.',
+                      'Nick: Goodbye.; Fisherman: Goodbye', # what was said is kept, the label of the option is not
+                      'Nick picked up / took Blue Dartwing']
+
+
+def test_a_sentence_ending_in_a_colon_is_not_a_character_change(example_skyrim_npc_character):
+    from src.characters_manager import Characters
+    from src.llm.output.change_character_parser import change_character_parser
+    from src.llm.output.output_parser import sentence_generation_settings
+    characters = Characters()
+    characters.add_or_update_character(example_skyrim_npc_character)
+    parser = change_character_parser(characters)
+    settings = sentence_generation_settings(example_skyrim_npc_character)
+    text = "We wander Tamriel hunting the abominations that prey on mortals:"
+    assert parser.cut_sentence(text, settings) == (None, text)
+    assert settings.stop_generation is False
+    parser.cut_sentence("Hulda: Another round!", settings) # a short name of someone not in the conversation is still cut off
+    assert settings.stop_generation is True
+
+
+def test_walking_away_is_remembered():
+    from src.conversation.conversation import Conversation
+    text = Conversation.get_walked_away_event_text('Nick', ['Fisherman'])
+    assert text.startswith('Nick walked away from Fisherman in the middle of the conversation') and 'personality' in text

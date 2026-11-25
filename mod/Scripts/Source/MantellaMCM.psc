@@ -23,6 +23,7 @@ int property oid_freeFlowDistance auto
 int property oid_freeFlowIncludeCreatures auto
 int property oid_awarenessMaxCharacters auto
 int property oid_awarenessDistance auto
+int property oid_conversationLeaveDistance auto
 int property oid_notableItemsEnabled auto
 int property oid_keymapCustomGameEventHotkey auto
 int property oid_keymapRadiantHotkey auto
@@ -125,7 +126,7 @@ string MantellaMCMcurrentPage
 ; Whenever a new repository value OR a new MCM setting is added, up the MCM version number returned by `ManatellaMCM.GetVersion()`
 ; and add the corresponding default value in 'MCMRepository.assignDefaultSettings' in a block corresponding to the version number like the examples
 int Function GetVersion()
-    Return 10
+    Return 11
 EndFunction
 
 event OnVersionUpdate(int a_version)
@@ -269,6 +270,8 @@ Event OnOptionHighlight (Int optionID)
 		SetInfoText("Whether the nearest character picked by free-flow may be a creature or animal. Characters under your crosshair can always be talked to. \nDefault: Off")
 	elseIf optionID == oid_awarenessMaxCharacters
 		SetInfoText("How many characters around you (outside of the conversation) NPCs are told about at most. Only characters that can be seen, or heard (a dragon, or fighting close by), are counted, nearest first. \nDefault: 10")
+	elseIf optionID == oid_conversationLeaveDistance
+		SetInfoText("How far away (in meters) you can get from an NPC you are talking with before they leave the conversation. When no one is left, the conversation ends. 0: NPCs never leave because of distance. \nDefault: 20")
 	elseIf optionID == oid_notableItemsEnabled
 		SetInfoText("NPCs know about the notable things they carry: a lot of gold, books, notes and maps, keys, and valuable items. These can come up in conversation, including conversations between NPCs. What they wear and wield is covered by the Equipment page. This option is separate from the awareness of surroundings above. \nDefault: On")
 	elseIf optionID == oid_awarenessDistance
