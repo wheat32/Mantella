@@ -7,6 +7,7 @@
 #include <NotableItems.h>
 #include <NearbyObjects.h>
 #include <OwnedItems.h>
+#include <Theft.h>
 #include <nlohmann/json.hpp>
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/msvc_sink.h>
@@ -788,6 +789,10 @@ bool Bind(RE::BSScript::IVirtualMachine* vm)
     vm->RegisterFunction("GetNearbyObjects", className, NearbyObjects::Get);
     vm->RegisterFunction("GetOwnedItemsNearby", className, OwnedItems::Get);
     vm->RegisterFunction("AllowTakingOwnedItems", className, OwnedItems::AllowTaking);
+    vm->RegisterFunction("RememberInventory", className, Theft::RememberInventory);
+    vm->RegisterFunction("GetTakenItems", className, Theft::GetTakenItems);
+    vm->RegisterFunction("ReportTheft", className, Theft::ReportTheft);
+    vm->RegisterFunction("IsItemOwnedBy", className, Theft::IsItemOwnedBy);
     vm->RegisterFunction("GetRaceDefaultVoiceType", className, GetRaceDefaultVoiceType);
     vm->RegisterFunction("SetRaceDefaultVoiceType", className, SetRaceDefaultVoiceType);
     vm->RegisterFunction("StopVoiceLine", className, StopVoiceLine);

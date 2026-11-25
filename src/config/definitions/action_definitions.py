@@ -77,10 +77,9 @@ class ActionDefinitions:
                         Some actions can only be triggered when `Advanced Actions` is enabled above.
                         To learn more about an action, see the associated JSON file in the data/actions/ folder."""
         default_disabled = [
-            # need a crime situation to make sense, or move NPCs in ways that can break quests
+            # absolve crimes for free, or move NPCs in ways that can break quests
             "AbsolveCrime",
             "CancelTravel",
-            "ReportCrime",
             "ShareConversation",
             "Teleport",
         ]

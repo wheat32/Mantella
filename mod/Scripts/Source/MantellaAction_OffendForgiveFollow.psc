@@ -127,6 +127,6 @@ EndFunction
 event OnNpcInventoryActionReceived(Form speaker)
     Actor aSpeaker = speaker as Actor
     if (aSpeaker)
-        aSpeaker.OpenInventory(true)
+        (Quest.GetQuest("MantellaConversation") as MantellaConversation).OpenInventoryToPlayer(aSpeaker)
     endif
 endEvent

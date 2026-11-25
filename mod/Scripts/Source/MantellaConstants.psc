@@ -75,6 +75,7 @@ string property KEY_ACTOR_OWNEDITEMS = "mantella_actor_owned_items_nearby" auto
 string property KEY_ACTOR_BASENAME = "mantella_actor_base_name" auto
 string property ACTION_NPC_TELLNAME = "mantella_npc_tellname" auto
 string property ACTION_NPC_PERMITTAKING = "mantella_npc_permittaking" auto
+string property ACTION_NPC_REPORTTHEFT = "mantella_npc_reporttheft" auto
 
 string property KEY_ACTOR_PC_DESCRIPTION = "mantella_pc_description" auto
 string property KEY_ACTOR_PC_VOICEPLAYERINPUT = "mantella_pc_voiceplayerinput" auto

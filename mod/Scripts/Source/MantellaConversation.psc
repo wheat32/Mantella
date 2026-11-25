@@ -66,9 +66,51 @@ Function RegisterForConversationEvents()
     RegisterForModEvent(EventInterface.EVENT_ACTION_RESPONSE_COMPLETED,"OnActionResponseCompleted")
     RegisterForModEvent(EventInterface.EVENT_ADVANCED_ACTIONS_PREFIX + mConsts.ACTION_NPC_TELLNAME, "OnTellNameActionReceived")
     RegisterForModEvent(EventInterface.EVENT_ADVANCED_ACTIONS_PREFIX + mConsts.ACTION_NPC_PERMITTAKING, "OnPermitTakingActionReceived")
+    RegisterForModEvent(EventInterface.EVENT_ADVANCED_ACTIONS_PREFIX + mConsts.ACTION_NPC_REPORTTHEFT, "OnReportTheftActionReceived")
     ; Follow is carried out by MantellaAdvancedAction_Follow. This only notes where the NPC is going with the player
     RegisterForModEvent(EventInterface.EVENT_ADVANCED_ACTIONS_PREFIX + mConsts.ACTION_NPC_FOLLOW, "OnFollowWithDestinationReceived")
 EndFunction
+
+; Opens the NPC's inventory to the player, and tells the NPC afterwards what the player took (with what it is worth, and whether it
+; is precious to them), so that they can mind it. Utility.Wait only passes outside of menus: it returns once the inventory is closed
+Function OpenInventoryToPlayer(Actor owner)
+    if !owner
+        return
+    endIf
+    SKSE_HTTP.RememberInventory(owner)
+    owner.OpenInventory(true)
+    Utility.Wait(0.1)
+    string[] taken = SKSE_HTTP.GetTakenItems(owner)
+    if taken.Length > 0
+        string takenText = taken[0]
+        int i = 1
+        while i < taken.Length
+            takenText += ", " + taken[i]
+            i += 1
+        endWhile
+        AddIngameEvent(PlayerRef.GetDisplayName() + " took from " + owner.GetDisplayName() + "'s belongings: " + takenText + ".")
+    endIf
+EndFunction
+
+; An NPC reports what the player took from their inventory as theft
+event OnReportTheftActionReceived(Form speaker, Form conversationQuest, int argumentsHandle)
+    string[] sourceNames = SKSE_HTTP.getStringArray(argumentsHandle, mConsts.ACTION_ARG_SOURCE)
+    Actor victim = None
+    if sourceNames.Length > 0
+        victim = GetActorByName(sourceNames[0])
+    endIf
+    if !victim
+        victim = speaker as Actor
+    endIf
+    if victim
+        int value = SKSE_HTTP.ReportTheft(victim)
+        if value > 0
+            Debug.Notification(victim.GetDisplayName() + " reported you for theft.")
+        else
+            AddIngameEvent("There was nothing taken from " + victim.GetDisplayName() + " that could be reported as theft.")
+        endIf
+    endIf
+endEvent
 
 ; An NPC without a name of their own told the player their name: from now on the game shows them by it
 event OnTellNameActionReceived(Form speaker, Form conversationQuest, int argumentsHandle)

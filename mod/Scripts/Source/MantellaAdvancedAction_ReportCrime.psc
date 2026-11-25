@@ -20,15 +20,24 @@ event OnNpcReportCrimeAdvancedActionReceived(Form speaker, Form conversationQues
         guardActor = FindAndAddNearbyGuard(conversation)
     endIf
     
-    if guardActor
-        Faction crimeFaction = guardActor.GetCrimeFaction()
+    ; Crimes can be reported anywhere: without a guard, the NPC reports it to the hold they belong to
+    Actor reporter = guardActor
+    if !reporter
+        reporter = speaker as Actor
+    endIf
+    Faction crimeFaction = None
+    if reporter
+        crimeFaction = reporter.GetCrimeFaction()
+    endIf
+    if crimeFaction
+        crimeFaction.ModCrimeGold(crimeGold, false)
         crimeFaction.ModCrimeGold(crimeGold, false)
 
         Debug.Notification(crimeGold + " bounty added to " + crimeFaction.GetName())
         EventInterface.AddMantellaEvent("Crime reported against the player.")
     Else
-        Debug.Notification("Crime report failed: No guard nearby")
-        EventInterface.AddMantellaEvent("Cannot report crime without a guard nearby. Please inform the player you will report them later.")
+        Debug.Notification("Crime report failed: no hold to report it to")
+        EventInterface.AddMantellaEvent("There is no hold this crime could be reported to here.")
     endIf
 
     EventInterface.MarkActionResponseCompleted(mConsts.ACTION_NPC_REPORTCRIME)

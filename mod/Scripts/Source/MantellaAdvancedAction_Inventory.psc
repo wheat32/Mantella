@@ -24,7 +24,7 @@ endEvent
 
 Function NpcInventory(Actor source)
     if (source)
-        source.OpenInventory(true)
         EventInterface.AddMantellaEvent(source.GetDisplayName() + "'s inventory opened.")
+        (Quest.GetQuest("MantellaConversation") as MantellaConversation).OpenInventoryToPlayer(source)
     endif
 EndFunction
