@@ -65,25 +65,37 @@ def to_host_path(path: str) -> str:
     try:
         import ctypes
         kernel32 = ctypes.windll.kernel32
-        convert = kernel32.wine_get_unix_file_name
-        convert.argtypes = [ctypes.c_wchar_p]
-        convert.restype = ctypes.c_void_p
         absolute_path = os.path.abspath(path)
-        pointer = convert(absolute_path)
-        if not pointer:
-            return path
-        try:
-            host_path = ctypes.string_at(pointer).decode('utf-8', errors='replace')
-        finally:
-            _free_wine_string(kernel32, pointer)
+        host_path = _get_unix_file_name(kernel32, absolute_path)
         # Paths inside a mod manager's virtual folders (eg the game's Data folder under Mod Organizer 2) have no single place
         # on the host: the conversion ends up somewhere else, such as the manager's overwrite folder. Converting the
-        # result back shows whether that happened, in which case the Windows path is the more truthful one to display
-        if not host_path or not _is_same_windows_path(to_windows_path(host_path), absolute_path):
-            return path
-        return host_path
+        # result back shows whether that happened
+        if host_path and _is_same_windows_path(to_windows_path(host_path), absolute_path):
+            return host_path
+        # In that case the path is shown as it is, only written the way the host writes it, if its drive is the host's
+        # file system (Z: by default): 'Z:\mnt\games\Skyrim' is '/mnt/games/Skyrim'
+        import ntpath # the path is a Windows path, also where this is run for testing
+        drive, path_on_drive = ntpath.splitdrive(absolute_path)
+        if drive and _get_unix_file_name(kernel32, drive + '\\') == '/':
+            return '/' + path_on_drive.replace('\\', '/').lstrip('/')
+        return path
     except Exception:
         return path
+
+
+def _get_unix_file_name(kernel32, windows_path: str) -> str | None:
+    """Asks Wine where a Windows path is on the host. None if Wine cannot tell"""
+    import ctypes
+    convert = kernel32.wine_get_unix_file_name
+    convert.argtypes = [ctypes.c_wchar_p]
+    convert.restype = ctypes.c_void_p
+    pointer = convert(windows_path)
+    if not pointer:
+        return None
+    try:
+        return ctypes.string_at(pointer).decode('utf-8', errors='replace')
+    finally:
+        _free_wine_string(kernel32, pointer)
 
 
 def _is_same_windows_path(first: str, second: str) -> bool:

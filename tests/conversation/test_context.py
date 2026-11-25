@@ -52,12 +52,12 @@ class TestContextGenderAndRacePromptVariables:
     def test_player_gender_and_race(self, default_context: Context):
         """The player's gender and race should be filled with readable values (not the raw game race string)"""
         result = default_context.generate_system_message("{player_gender} {player_race}", [])
-        assert result == "male Nord"
+        assert result.split("\n\n")[0] == "male Nord" # notes about the player's name and relationships follow the prompt
 
     def test_single_npc_gender_and_race(self, default_context: Context):
         """The singular variables should return bare descriptions for inline use, the plural variables full sentences"""
         result = default_context.generate_system_message("{gender}|{race}|{genders}|{races}|{genders_and_races}", [])
-        assert result == "male|Imperial|Guard is a male.|Guard is an Imperial.|Guard is a male Imperial."
+        assert result.split("\n\n")[0] == "male|Imperial|Guard is a male.|Guard is an Imperial.|Guard is a male Imperial."
 
     def test_multi_npc_genders_and_races(self, default_context: Context, another_example_skyrim_npc_character: Character):
         """With multiple NPCs, the plural variables should return one sentence per NPC"""
@@ -66,7 +66,7 @@ class TestContextGenderAndRacePromptVariables:
 
         result = default_context.generate_system_message("{genders_and_races}", [])
 
-        assert result == "Guard is a male Imperial. Lydia is a female Nord."
+        assert result.split("\n\n")[0] == "Guard is a male Imperial. Lydia is a female Nord."
 
     def test_raw_race_string_does_not_leak_into_prompt(self, default_context: Context):
         result = default_context.generate_system_message("{player_race} {race} {races} {genders_and_races}", [])

@@ -53,6 +53,14 @@ class sentence_accumulator:
     
     def refuse(self, refused_text: str):
         self.__unparseable = refused_text
+
+    def take_remaining_text(self) -> str:
+        """Everything that has not become a sentence (eg a last line without punctuation, or a lone "Inventory:" at the end)"""
+        remaining = self.__unparseable + self.__prepared_match + self.__cleaned_llm_output
+        self.__unparseable = ""
+        self.__prepared_match = ""
+        self.__cleaned_llm_output = ""
+        return remaining
     
 
 

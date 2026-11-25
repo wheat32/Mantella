@@ -13,6 +13,7 @@ from src.llm.sentence_queue import SentenceQueue
 from src.llm.sentence import Sentence
 from src.remember.remembering import Remembering
 from src.output_manager import ChatManager
+from src.llm.output.actions_parser import actions_parser
 from src.llm.messages import AssistantMessage, SystemMessage, UserMessage
 from src.conversation.context import Context
 from src.llm.message_thread import message_thread
@@ -45,6 +46,8 @@ class Conversation:
         self.__player_speaks_first: bool = False # free-flow conversations: the NPC waits for what the player says instead of greeting them
         self.__is_player_interrupting = False
         self.__interrupted_npc_name: str | None = None
+        self.__interruption_kind: str | None = None # see __interrupt_response
+        self.__last_sentence_voice_duration: float = 0 # length of the voiceline last handed to the game (without the wait time buffer)
         self.__last_npc_speaker_name: str | None = None
         self.__stt: Transcriber | None = stt
         self.__events_refresh_time: float = context_for_conversation.config.events_refresh_time  # Time in seconds before events are considered stale
@@ -147,7 +150,7 @@ class Conversation:
 
         # interrupt response if player has spoken
         if self.__interruption_enabled() and self.__stt.has_player_spoken:
-            return self.__interrupt_response()
+            return self.__interrupt_response(had_more_to_say=True)
         
         # restart mic listening as soon as NPC's first sentence is processed
         if self.__interruption_enabled() and not self.__stt.is_listening:
@@ -159,6 +162,12 @@ class Conversation:
         
         # Check if this is an action-only sentence (no text, but has actions)
         if next_sentence and len(next_sentence.text.strip()) == 0 and len(next_sentence.actions) > 0:
+            if any(action.get('identifier') in actions_parser.AFTER_SPEECH_ACTIONS for action in next_sentence.actions if isinstance(action, dict)):
+                # eg opening the NPC's inventory: only once their last line has been played, unless the player speaks first
+                while time.time() - self.last_sentence_start_time < self.last_sentence_audio_length:
+                    if self.__interruption_enabled() and self.__stt.has_player_spoken:
+                        return self.__interrupt_response(had_more_to_say=False)
+                    time.sleep(0.01)
             if FunctionManager.any_action_requires_response(next_sentence.actions):
                 self.__awaiting_action_result = True
             return comm_consts.KEY_REPLYTYPE_NPCACTION, next_sentence
@@ -173,9 +182,12 @@ class Conversation:
             # before immediately sending the next voiceline, give the player the chance to interrupt
             while time.time() - self.last_sentence_start_time < self.last_sentence_audio_length:
                 if self.__interruption_enabled() and self.__stt.has_player_spoken:
-                    return self.__interrupt_response()
+                    # This sentence was already recorded as said, but is never played: the NPC did not say it
+                    self.__unrecord_sentence(next_sentence)
+                    return self.__interrupt_response(had_more_to_say=True)
                 time.sleep(0.01)
             self.last_sentence_audio_length = next_sentence.voice_line_duration + self.__context.config.wait_time_buffer
+            self.__last_sentence_voice_duration = next_sentence.voice_line_duration
             self.last_sentence_start_time = time.time()
             return comm_consts.KEY_REPLYTYPE_NPCTALK, next_sentence
         else:
@@ -206,7 +218,7 @@ class Conversation:
                     if self.__interruption_enabled():
                         while time.time() - self.last_sentence_start_time < self.last_sentence_audio_length:
                             if self.__stt.has_player_spoken:
-                                return self.__interrupt_response()
+                                return self.__interrupt_response(had_more_to_say=False)
                             time.sleep(0.01)
                     return comm_consts.KEY_REPLYTYPE_PLAYERTALK, None
 
@@ -221,26 +233,58 @@ class Conversation:
                 and self.__allow_mic_input
                 and not isinstance(self.__conversation_type, radiant))
 
-    def __interrupt_response(self) -> tuple[str, None]:
+    # Speech that starts this close to the end of the NPC's line (or later) does not cut the line off: voicelines often end in
+    # a short silence, and answering as the NPC finishes is not talking over them
+    LINE_END_GRACE_SECONDS: float = 1.0
+
+    def __interrupt_response(self, had_more_to_say: bool) -> tuple[str, None]:
         """Stops the current response so the game can request the player's input
 
         The playing voiceline keeps playing while the player speaks over it
         and is only cut once the new response starts (game-side via _playerInputPending, Python-side in
         process_player_input), keeping the silence gap between the old and new voiceline short
+
+        Args:
+            had_more_to_say (bool): whether the NPC had more lines to say (or was still generating them) after the current one
         """
         self.__stop_generation()
         self.__sentences.clear()
         self.__is_player_interrupting = True
-        # the NPC was cut off if their line was still playing, or if they had more to say
-        was_npc_speaking = time.time() - self.last_sentence_start_time < self.last_sentence_audio_length
-        self.__interrupted_npc_name = self.__last_npc_speaker_name if (was_npc_speaking or self.__last_npc_speaker_name) else None
+        self.__interruption_kind = self.get_interruption_kind(self.__stt.speech_start_time if self.__stt else None, time.time(),
+                                                              self.last_sentence_start_time, self.__last_sentence_voice_duration,
+                                                              had_more_to_say, self.LINE_END_GRACE_SECONDS)
+        self.__interrupted_npc_name = self.__last_npc_speaker_name
         if self.__stt is not None and self.__stt.ptt_enabled:
             # Pressing the push-to-talk key is a deliberate interruption (unlike noise picked up by an open mic),
             # so audio played by Mantella itself is stopped right away
             self.__output_manager.stop_external_playback()
         # the interrupted line's estimated duration no longer applies
         self.last_sentence_audio_length = 0
+        self.__last_sentence_voice_duration = 0
         return comm_consts.KEY_REQUESTTYPE_TTS, None
+
+    @staticmethod
+    def get_interruption_kind(speech_start_time: float | None, now: float, line_start_time: float, line_duration: float,
+                              had_more_to_say: bool, grace_seconds: float) -> str | None:
+        """How the player's speech relates to what the NPC was saying
+
+        Returns:
+            str | None: 'mid_line' if the player talked over the line being spoken, 'between_lines' if the line was (as good as)
+            finished but the NPC had more to say, None if the NPC had finished anyway
+        """
+        started = speech_start_time if speech_start_time is not None and speech_start_time <= now else now
+        line_end = line_start_time + line_duration
+        if line_duration > 0 and line_end - started > grace_seconds:
+            return 'mid_line'
+        if had_more_to_say:
+            return 'between_lines'
+        return None
+
+    def __unrecord_sentence(self, sentence: Sentence) -> None:
+        """Takes back a sentence that was recorded as said but never handed to the game"""
+        last_message = self.__messages.get_last_assistant_message()
+        if last_message and last_message.remove_sentence(sentence) and last_message.sentence_count == 0 and not last_message.tool_calls:
+            self.__messages.remove_message(last_message)
 
     @utils.time_it
     def process_player_input(self, player_text: str) -> tuple[str, bool, Sentence|None]:
@@ -404,9 +448,12 @@ class Conversation:
             all_ingame_events.append(f"{discarded} is not in this conversation. Only {', '.join(npc_names)} can speak.")
             self.__output_manager.clear_discarded_character_name()
         if self.__is_player_interrupting:
-            all_ingame_events.append(self.__get_interruption_event())
+            interruption_event = self.__get_interruption_event()
+            if interruption_event:
+                all_ingame_events.append(interruption_event)
             self.__is_player_interrupting = False
             self.__interrupted_npc_name = None
+            self.__interruption_kind = None
         max_events = min(len(all_ingame_events) ,self.__context.config.max_count_events)
         message.add_event(all_ingame_events[-max_events:])
         self.__context.clear_context_ingame_events()        
@@ -417,15 +464,21 @@ class Conversation:
         return message
 
     def __get_interruption_event(self) -> str:
-        """Tells the LLM that the player talked over an NPC, so that the NPC can react to it the way their character would
-        (eg a proud or short-tempered NPC taking offense, a loyal follower not minding at all)"""
+        """Tells the LLM that the player spoke before an NPC had finished, so that the NPC knows they did not get to say everything"""
         player = self.__context.npcs_in_conversation.get_player_character()
-        player_name = player.name if player else 'The player'
-        npc_name = self.__interrupted_npc_name
-        if npc_name:
-            return (f"{player_name} interrupted {npc_name} mid-sentence, talking over them before they could finish. "
-                    f"{npc_name} reacts to being cut off the way someone of their personality and standing would.")
-        return f"{player_name} interrupted the conversation, talking over what was being said."
+        return self.get_interruption_event_text(player.name if player else 'The player', self.__interrupted_npc_name, self.__interruption_kind)
+
+    @staticmethod
+    def get_interruption_event_text(player_name: str, npc_name: str | None, kind: str | None) -> str:
+        if kind is None:
+            return ''
+        if not npc_name:
+            return f"{player_name} spoke up before everything had been said."
+        if kind == 'mid_line':
+            return (f"{player_name} cut in while {npc_name} was still speaking, so {npc_name} did not get to finish their sentence. "
+                    f"{npc_name} answers what {player_name} said. Whether {npc_name} remarks on being cut off depends on their personality "
+                    f"and on how rude it was; most people let it go.")
+        return f"{player_name} spoke up before {npc_name} had said everything they meant to, so {npc_name} left the rest unsaid."
 
     @utils.time_it
     def resume_after_interrupting_action(self) -> bool:

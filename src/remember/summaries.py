@@ -11,7 +11,7 @@ from src.llm.summary_client import SummaryLLMClient
 from src.llm.message_thread import message_thread
 from src.llm.messages import UserMessage, AssistantMessage
 from src.characters_manager import Characters
-from src.character_manager import Character, get_genders_text, get_races_text, get_genders_and_races_text
+from src.character_manager import Character, get_genders_text, get_races_text, get_genders_and_races_text, knows_player_name
 from src.remember.remembering import Remembering
 from src import utils
 from src.wine import to_host_path
@@ -279,6 +279,16 @@ class Summaries(Remembering):
         latest_file_number = get_latest_file_number(target_folder)
         return f"{target_folder}/{base_name}_summary_{latest_file_number}.txt"
     
+    @staticmethod
+    def get_unknown_player_name_summary_note(player_name: str, npc_names: list[str]) -> str:
+        """Keeps the player's name out of the memories of NPCs who were never told it, as those memories tell the NPC what they know later on"""
+        if not npc_names or not player_name or player_name == "the player":
+            return ""
+        names = ', '.join(npc_names)
+        return (f"\n\nImportant: {names} may not have known {player_name}'s name. Only use the name {player_name} in the summary if {player_name} "
+                f"said it in this conversation, it is in the previous summaries, or {names} clearly knew who {player_name} was (eg a courier sent to "
+                f"find them, or a fellow guild member). Otherwise refer to them as a stranger, describing them if that helps (eg by their race or what they wore).")
+
     @utils.time_it
     def __create_new_conversation_summary(self, npc_info: CharacterSummaryParameters, world_id: str, end_timestamp: float | None = None, min_messages: int = 5, player_name: str = "the player") -> str:
         if self.__config.game.base_game == GameEnum.FALLOUT4:
@@ -303,6 +313,7 @@ class Summaries(Remembering):
                     races=races,
                     genders_and_races=genders_and_races
                 )
+        prompt += self.get_unknown_player_name_summary_note(player_name, [c.name for c in npc_info.characters if not knows_player_name(c)])
         if len(npc_info.messages) < min_messages:
             logger.info(f"Conversation summary not saved. Not enough dialogue spoken.")
             return ""

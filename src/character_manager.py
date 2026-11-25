@@ -280,3 +280,9 @@ def get_races_text(characters: list[Character]) -> str:
 def get_genders_and_races_text(characters: list[Character]) -> str:
     """The combined genders and races of the given characters in natural language (eg "Lydia is a female Nord. Arngeir is a male Greybeard.")"""
     return _describe_characters(characters, lambda c: f"{c.gender} {c.race}")
+
+
+def knows_player_name(npc: Character) -> bool:
+    """Whether an NPC knows the player's name from the start: friends and anyone closer do (relationship rank 1 or higher).
+    Others only learn it if the player tells them, or if it is part of their memories"""
+    return npc.relationship_rank > 0

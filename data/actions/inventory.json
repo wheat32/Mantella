@@ -1,7 +1,7 @@
 {
     "identifier": "mantella_npc_inventory",
     "name": "Inventory",
-    "description": "Open inventory to give / take items with the player.",
+    "description": "Open your inventory so that the player can take items from you or give items to you. Only use this when the player asks to see your belongings or to get or give something, and you agree to it. Not needed for items that have already changed hands.",
     "key": "Inventory",
     "parameters": {
         "source": {
@@ -11,7 +11,7 @@
         }
     },
     "required": ["source"],
-    "prompt": "To show the player what you have in your inventory or to give / take an item, begin your response with '{key}:'.",
+    "prompt": "If the player asks to see your belongings or to get or give something, and you are willing, begin your response with '{key}:' to open your inventory to them. Whether you are willing depends on your personality and on how you feel about the player: most people do not let a stranger go through their things, while a friend, or someone who has won you over, might be let. Only do this when asked: thanking you for something they already have does not need it.",
     "allowed_games": ["skyrim","Fallout4"],
     "requires_response": true,
     "is-interrupting": false,

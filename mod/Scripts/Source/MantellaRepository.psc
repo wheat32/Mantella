@@ -33,6 +33,9 @@ int property MantellaEndConversationHotkey auto
 int property MantellaFreeFlowHotkey auto ; no longer used: free-flow uses MantellaPushToTalkHotkey. Kept for saves made with version 8
 int property MantellaPushToTalkHotkey auto
 bool property pushToTalkEnabled auto
+; When the free-flow talk key last started a conversation (real time in seconds). Kept here rather than on the conversation quest,
+; whose script variables are reset when the quest is started
+float property playerSpeaksFirstRequestTime auto
 bool property freeFlowUseNearest auto
 bool property freeFlowEnabled auto
 bool property showScreenshotMessages auto

@@ -1,3 +1,4 @@
+import html
 import os
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
@@ -33,6 +34,9 @@ class StartUI(routeable):
 
     def create_main_block(self) -> gr.Blocks:
         with gr.Blocks(title="Mantella", fill_height=True, analytics_enabled=False, theme= self.__get_theme(), css=self.__load_css(), js=self.CONSOLE_JS) as main_block:
+            prerelease_label = utils.get_prerelease_label()
+            if prerelease_label:
+                gr.HTML(self.get_prerelease_banner_html(utils.get_version(), prerelease_label))
             # with gr.Tab("Settings") as tabs:
             settings_page = self.__generate_settings_page()
             # Options that configure the XTTS server Mantella starts itself are meaningless if XTTS runs on another machine
@@ -49,12 +53,29 @@ class StartUI(routeable):
             self.__generate_console_section()
 
             with gr.Row(elem_classes="custom-footer"):
-                gr.HTML("""
-                    <div class="custom-footer">
-                        <a href="https://art-from-the-machine.github.io/Mantella/" target="_blank">Mantella Installation Guide</a>
-                    </div>
-                """)
+                gr.HTML(self.get_footer_html(utils.get_version()))
         return main_block
+
+    @staticmethod
+    def get_prerelease_banner_html(version: str, prerelease_label: str) -> str:
+        """The badge shown at the top of the page for a build that is not a normal release"""
+        kind = html.escape(prerelease_label.split('.')[0].upper()) # ALPHA, BETA, ...
+        return f"""
+            <div class="prerelease-banner">
+                <span class="badge badge-prerelease"><b>{kind}</b></span>
+                <span>Pre-release {html.escape(version)}: a test build that may have bugs.</span>
+            </div>
+        """
+
+    @staticmethod
+    def get_footer_html(version: str) -> str:
+        version_html = f'<span class="mantella-version">Mantella {html.escape(version)}</span>' if version else ''
+        return f"""
+            <div class="custom-footer">
+                <a href="https://art-from-the-machine.github.io/Mantella/" target="_blank">Mantella Installation Guide</a>
+                {version_html}
+            </div>
+        """
 
     def __on_setting_changed(self, config_value):
         """Applies settings that can take effect right away, without waiting for Mantella's services to be set up again"""
@@ -113,16 +134,21 @@ class StartUI(routeable):
         delete_button.click(delete_memory, npc_dropdown, [npc_dropdown, memory_text, status])
 
     def __generate_console_section(self):
-        """Shows Mantella's console output below the settings, along with buttons to stop / restart Mantella"""
+        """Shows Mantella's console output below the settings, along with buttons to stop / restart Mantella.
+        The console can be collapsed. It starts out open in pre-release builds, where its output is what testing is about"""
         with gr.Column(elem_classes="console-section"):
             with gr.Row(elem_classes="console-header"):
-                gr.HTML('<h3 style="margin: 0;">Console</h3>')
+                control_status = gr.Markdown("")
                 restart_button = gr.Button("Restart Mantella", size='sm', scale=0, min_width=160)
                 stop_button = gr.Button("Stop Mantella", variant="stop", size='sm', scale=0, min_width=160)
-            control_status = gr.Markdown("")
-            gr.HTML('<div id="mantella-console" class="mantella-console" role="log" aria-label="Mantella console output"></div>')
+            with gr.Accordion(label="Console", open=self.is_console_open_by_default(utils.get_prerelease_label())):
+                gr.HTML('<div id="mantella-console" class="mantella-console" role="log" aria-label="Mantella console output"></div>')
             restart_button.click(process_control.restart_mantella, None, control_status)
             stop_button.click(process_control.stop_mantella, None, control_status)
+
+    @staticmethod
+    def is_console_open_by_default(prerelease_label: str) -> bool:
+        return bool(prerelease_label)
 
     # Polls the server for new log messages and appends them to the console panel
     CONSOLE_JS = """
@@ -153,6 +179,10 @@ class StartUI(routeable):
                     }
                     while (panel.childElementCount > 2000) { panel.removeChild(panel.firstChild); }
                     if (stickToBottom && data.entries.length) { panel.scrollTop = panel.scrollHeight; }
+                    // While the console is collapsed it cannot be scrolled. When it is opened again, it shows the newest lines
+                    const isVisible = panel.offsetParent !== null;
+                    if (isVisible && panel.dataset.wasHidden === '1') { panel.scrollTop = panel.scrollHeight; }
+                    panel.dataset.wasHidden = isVisible ? '0' : '1';
                 } catch (error) {
                     if (!wasOffline) {
                         wasOffline = true;

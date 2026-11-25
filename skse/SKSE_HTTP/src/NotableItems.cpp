@@ -2,6 +2,7 @@
 #include "SKSE/SKSE.h"
 #include <NotableItems.h>
 #include <algorithm>
+#include <optional>
 
 namespace
 {
@@ -43,8 +44,131 @@ std::string GetItemText(const char* name, std::int32_t count, const std::string&
 }
 } // namespace
 
+namespace
+{
+// The kinds of things a character can carry, in the order they are listed in
+enum class Kind
+{
+    Gold,
+    Food,
+    Potions,
+    Poisons,
+    Ingredients,
+    Ammunition,
+    Weapons,
+    Clothing,
+    SoulGems,
+    Scrolls,
+    Books,
+    Keys,
+    OddsAndEnds,
+    Count
+};
+
+constexpr const char* KIND_NAMES[] = {"gold", "food", "potions", "poisons", "ingredients", "arrows or bolts", "spare weapons", "spare clothing or armor", "soul gems", "scrolls", "books or notes", "keys", "odds and ends"};
+static_assert(sizeof(KIND_NAMES) / sizeof(KIND_NAMES[0]) == static_cast<std::size_t>(Kind::Count));
+
+std::optional<Kind> GetKind(RE::TESBoundObject* item)
+{
+    switch (item->GetFormType())
+    {
+        case RE::FormType::AlchemyItem:
+        {
+            RE::AlchemyItem* potion = item->As<RE::AlchemyItem>();
+            if (potion == nullptr)
+            {
+                return std::nullopt;
+            }
+            if (potion->IsFood() == true)
+            {
+                return Kind::Food;
+            }
+            if (potion->IsPoison() == true)
+            {
+                return Kind::Poisons;
+            }
+            return Kind::Potions;
+        }
+
+        case RE::FormType::Ingredient:
+            return Kind::Ingredients;
+
+        case RE::FormType::Ammo:
+            return Kind::Ammunition;
+
+        case RE::FormType::Weapon:
+            return Kind::Weapons;
+
+        case RE::FormType::Armor:
+            return Kind::Clothing;
+
+        case RE::FormType::SoulGem:
+            return Kind::SoulGems;
+
+        case RE::FormType::Scroll:
+            return Kind::Scrolls;
+
+        case RE::FormType::Book:
+            return Kind::Books;
+
+        case RE::FormType::KeyMaster:
+            return Kind::Keys;
+
+        case RE::FormType::Misc:
+            return Kind::OddsAndEnds;
+
+        default:
+            return std::nullopt;
+    }
+}
+} // namespace
+
 namespace NotableItems
 {
+std::vector<std::string> GetKinds(RE::StaticFunctionTag*, RE::Actor* carrier)
+{
+    std::vector<std::string> result;
+    if (carrier == nullptr)
+    {
+        return result;
+    }
+    try
+    {
+        bool found[static_cast<std::size_t>(Kind::Count)] = {};
+        RE::TESObjectREFR::InventoryItemMap inventory = carrier->GetInventory();
+        for (const auto& [item, data] : inventory)
+        {
+            std::int32_t count = data.first;
+            const std::unique_ptr<RE::InventoryEntryData>& entry = data.second;
+            if (item == nullptr || count <= 0)
+            {
+                continue;
+            }
+            if (entry != nullptr && entry->IsWorn() == true)
+            {
+                continue;
+            }
+            std::optional<Kind> kind = item->GetFormID() == GOLD_FORM_ID ? std::optional<Kind>(Kind::Gold) : GetKind(item);
+            if (kind.has_value() == true)
+            {
+                found[static_cast<std::size_t>(kind.value())] = true;
+            }
+        }
+        for (std::size_t i = 0; i < static_cast<std::size_t>(Kind::Count); ++i)
+        {
+            if (found[i] == true)
+            {
+                result.push_back(KIND_NAMES[i]);
+            }
+        }
+    }
+    catch (const std::exception& e)
+    {
+        SKSE::log::warn("The kinds of things a character carries could not be worked out: {}", e.what());
+    }
+    return result;
+}
+
 std::vector<std::string> Get(RE::StaticFunctionTag*, RE::Actor* carrier, std::int32_t minimumGold, std::int32_t minimumItemValue, std::int32_t maximumItems)
 {
     std::vector<std::string> result;

@@ -52,6 +52,8 @@ class communication_constants:
     KEY_ACTOR_ISENEMY: str = PREFIX + "actor_is_enemy"
     KEY_ACTOR_CUSTOMVALUES: str = PREFIX + "actor_custom_values"
     KEY_ACTOR_NOTABLEITEMS: str = PREFIX + "actor_notable_items"
+    KEY_ACTOR_CARRIEDKINDS: str = PREFIX + "actor_carried_kinds"
+    KEY_ACTOR_CARRIESNOTHING: str = PREFIX + "actor_carries_nothing"
     KEY_ACTOR_EQUIPMENT: str = PREFIX + "equipment"
 
     KEY_ACTOR_SPEAKER: str = PREFIX + "actor_speaker"

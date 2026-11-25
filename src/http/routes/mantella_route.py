@@ -1,7 +1,7 @@
 import json
 from typing import Any, Hashable
 
-from threading import Lock
+from threading import Lock, Thread
 from fastapi import FastAPI, Request
 from fastapi.concurrency import run_in_threadpool
 from src.config.config_loader import ConfigLoader
@@ -95,12 +95,24 @@ class mantella_route(routeable):
 
     @utils.time_it
     def add_route_to_server(self, app: FastAPI):
+        # Mantella is set up right away, rather than when the game first asks for something: with push-to-talk, what the player
+        # says while a free-flow conversation is starting is recorded from then on, also for the first conversation of the session
+        if self._config.is_run_integrated:
+            Thread(target=self.__set_up_in_advance, daemon=True).start()
         @app.post("/mantella")
         async def mantella(request: Request):
             received_json: dict[str, Any] | None = await request.json()
             # Requests can block for a long time (eg while waiting for the player to speak).
             # Handling them in a worker thread keeps the rest of the server (eg the settings UI) responsive in the meantime
             return await run_in_threadpool(self._handle_request, received_json)
+
+    def __set_up_in_advance(self) -> None:
+        try:
+            with self.__request_lock:
+                if not self._has_route_been_initialized:
+                    self._can_route_be_used()
+        except Exception as e:
+            logger.warning(f'Could not set Mantella up in advance, it will be set up when the game asks for it: {e}')
 
     def __apply_game_push_to_talk(self, received_json: dict[str, Any] | None) -> None:
         """Push-to-talk is switched on and its key is set in the game's mod menu. The game sends both along when a conversation

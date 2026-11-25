@@ -97,6 +97,16 @@ def get_version(default: str = '') -> str:
         return default
 
 
+def get_prerelease_label() -> str:
+    """The pre-release label of this build from version.json (eg "beta.1"), empty for a normal release"""
+    try:
+        import json
+        with open(os.path.join(resolve_path(), 'version.json'), 'r', encoding='utf-8') as f:
+            return str(json.load(f).get('prerelease') or '').strip()
+    except Exception:
+        return ''
+
+
 def play_mantella_ready_sound():
     try:
         mantella_ready_wav_path = os.path.join(resolve_path(), 'data', 'mantella_ready.wav')

@@ -270,7 +270,7 @@ Event OnOptionHighlight (Int optionID)
 	elseIf optionID == oid_awarenessMaxCharacters
 		SetInfoText("How many characters around you (outside of the conversation) NPCs are told about at most. Only characters that can be seen, or heard (a dragon, or fighting close by), are counted, nearest first. \nDefault: 10")
 	elseIf optionID == oid_notableItemsEnabled
-		SetInfoText("NPCs know about the notable things they carry: a lot of gold, books, notes and maps, keys, and valuable items. These can come up in conversation, including conversations between NPCs. What they wear and wield is covered by the Equipment page. \nDefault: On")
+		SetInfoText("NPCs know about the notable things they carry: a lot of gold, books, notes and maps, keys, and valuable items. These can come up in conversation, including conversations between NPCs. What they wear and wield is covered by the Equipment page. This option is separate from the awareness of surroundings above. \nDefault: On")
 	elseIf optionID == oid_awarenessDistance
 		SetInfoText("How far away (in meters) characters can be for NPCs to be told about them, if they can be seen or heard. \nDefault: 150")
 	elseIf optionID == oid_keymapEndConversationHotkey

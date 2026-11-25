@@ -11,6 +11,7 @@ from src.telemetry.telemetry import get_telemetry_manager
 from src.actions.function_manager import FunctionManager
 from src.ui.log_buffer import get_log_buffer, get_console_log_file, ConsoleLogFile
 from src.wine import to_host_path
+import src.system_info as system_info
 
 class MantellaSetup:
     def __init__(self):
@@ -31,6 +32,11 @@ class MantellaSetup:
 
         logger = utils.get_logger()
         self.apply_console_log_setting(self.config)
+        try:
+            for line in system_info.format_system_info(system_info.get_system_info(mantella_version, self.config.game, getattr(self.config, 'game_path', None), self.config.is_run_integrated)):
+                logger.log(23, line)
+        except Exception as e:
+            logger.debug(f'Could not collect system information: {e}')
         # to_host_path shows the paths as they are on the host system when running under Wine / Proton
         logger.log(23, f'''Mantella.exe running in:
     {to_host_path(os.getcwd())}
